@@ -1,0 +1,94 @@
+{
+  "shape": "droplet",
+  "sourceHash": "429316b791ebcc26b7a89b6b0439e5febf7426bb186301eb834ad49bcae2ef2d",
+  "scale": 1,
+  "bottom": 0,
+  "volume": 0.00010308855277811332,
+  "layout": {
+    "positions": {
+      "offset": 0,
+      "length": 18150,
+      "type": "Float32Array"
+    },
+    "normals": {
+      "offset": 72600,
+      "length": 18150,
+      "type": "Float32Array"
+    },
+    "indices": {
+      "offset": 145200,
+      "length": 36288,
+      "type": "Uint32Array"
+    },
+    "particles": {
+      "offset": 290352,
+      "length": 1929,
+      "type": "Float64Array"
+    },
+    "tets": {
+      "offset": 305784,
+      "length": 9960,
+      "type": "Uint32Array"
+    },
+    "volumes": {
+      "offset": 345624,
+      "length": 2490,
+      "type": "Float64Array"
+    },
+    "bindingIds": {
+      "offset": 365544,
+      "length": 24200,
+      "type": "Uint32Array"
+    },
+    "bindingWeights": {
+      "offset": 462344,
+      "length": 24200,
+      "type": "Float64Array"
+    },
+    "tetIds": {
+      "offset": 655944,
+      "length": 6050,
+      "type": "Uint32Array"
+    },
+    "contacts": {
+      "offset": 680144,
+      "length": 1040,
+      "type": "Uint32Array"
+    },
+    "opticalPositions": {
+      "offset": 684304,
+      "length": 4470,
+      "type": "Float32Array"
+    },
+    "opticalNormals": {
+      "offset": 702184,
+      "length": 4470,
+      "type": "Float32Array"
+    },
+    "opticalIndices": {
+      "offset": 720064,
+      "length": 8928,
+      "type": "Uint32Array"
+    },
+    "opticalBindingIds": {
+      "offset": 755776,
+      "length": 5960,
+      "type": "Uint32Array"
+    },
+    "opticalBindingWeights": {
+      "offset": 779616,
+      "length": 5960,
+      "type": "Float64Array"
+    },
+    "thicknessIds": {
+      "offset": 827296,
+      "length": 18150,
+      "type": "Uint32Array"
+    },
+    "thicknessWeights": {
+      "offset": 899896,
+      "length": 18150,
+      "type": "Float32Array"
+    }
+  }
+}
