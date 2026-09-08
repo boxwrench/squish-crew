@@ -1,14 +1,19 @@
 # Squish Crew
 
-A mobile-first soft mascot physics toy, currently using the inherited Droppie
-body as a placeholder while preserving its WebGPU soft-body engine, interaction,
-and browser-audio architecture.
+A mobile-first soft mascot physics toy with one round, deformable bean-person
+body, built on the inherited Droppie WebGPU engine and interaction architecture.
+
+Phase 2 is a crude opaque skin/navy/denim prototype. The settled body measures
+about 73 × 59 × 48 mm (height × width × depth). It has no limbs or face details.
+See [Phase 2 measurements](docs/phase-2.md) for tuning, validation and limitations.
+The inherited Droppie tutorials below describe the technical lineage; their
+water-material discussion is historical, not the current character material.
 
 ## Play with Squish Crew
 
 **[boxwrench.github.io/squish-crew](https://boxwrench.github.io/squish-crew/)**
 
-Tap the placeholder to hop. Drag the body or tip to stretch it, then release to throw
+Tap the body to hop. Grab the belly, side or upper section to stretch it, then release to throw
 it. Drag empty floor to orbit, pinch or scroll to zoom, press Space to hop, R
 to reset, and Escape to release. Sound unlocks after interaction; the buttons
 in the top-right mute sound and reset the toy.
@@ -61,7 +66,7 @@ The elastic solve separates two useful ideas:
   drop into a pancake;
 * bulk stiffness resists changes in volume, such as squeezing the drop smaller.
 
-The current values are `shear: 240`, `bulk: 65000`, `density: 1050`, gravity
+The current values are `shear: 1200`, `bulk: 65000`, `density: 1050`, gravity
 `2.4`, three solver iterations, and a fixed step of `1 / 240` seconds in
 [`src/physics/constants.js`](src/physics/constants.js). The numbers are in SI
 units as far as this toy's scale permits. XPBD adds compliance to the
@@ -259,7 +264,7 @@ grab/release/reset/mute and mobile touch loading, and writes screenshots to
 * [`src/game/sound.ts`](src/game/sound.ts) owns gesture unlocking, procedural
   contact audio, compression, and mute behavior.
 
-`npm run build:model` regenerates the deterministic droplet mesh, tetrahedral
+`npm run build:model` regenerates the deterministic mascot mesh, tetrahedral
 cage, surface embeddings, and optical proxy. `npm run build:kernel` rebuilds the
 optional kernel source.
 

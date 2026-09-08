@@ -106,15 +106,13 @@ function centerVelocity(body) {
   const before=boxPenetration(body,facility.visual.seatBoxes);
   const beforeCenter=body.center.toArray();
   assert(before>.001,'seat collision setup overlaps the seat');
-  // The droplet straddles the 6 mm slats instead of resting on them, so the
-  // solver needs more than one 1/240 s step to lift the surface clear, and a
-  // deformable body can deepen the measured maximum on the very first one.
-  // Assert that the contact converges rather than that it improves instantly.
+  // The broader mascot straddles the 6 mm slats. Allow ten simulated seconds
+  // for this deeply overlapping fixture to clear; the 1 mm tolerance is unchanged.
   body.wake();
-  for(let i=0;i<480;i++){rig.step(PHYS.step);body.step(PHYS.step);facility.afterStep();rig.afterStep();}
+  for(let i=0;i<2400;i++){rig.step(PHYS.step);body.step(PHYS.step);facility.afterStep();rig.afterStep();}
   body.updateSurface();
   const after=boxPenetration(body,facility.visual.seatBoxes);
-  assert(after<.001,'swing seat slats resolve the body back out');
+  assert(after<.001,`swing seat slats resolve the body back out (penetration ${after} m)`);
   assert(Math.hypot(...body.center.toArray().map((value,i)=>value-beforeCenter[i]))>1e-6,'seat contact resolves through the deformed body');
   facility.dispose();
 }

@@ -86,7 +86,8 @@ export async function makeTable(optics:RefractiveLightField,light:{color:THREE.C
   const coatTexture=texture(normal,uv).xyz;
   const coatXY=coatTexture.xy.sub(.5).mul(vec2(.27,-.27)).mul(float(1).sub(wet)).add(surfaceWave).add(.5);
   material.clearcoatNormalNode=normalMap(vec3(coatXY,coatTexture.z),vec2(1));
-  material.emissiveNode=albedo.mul(texture(optics.lightTexture,opticalUV).rgb).mul(light.irradiance/Math.PI).mul(vec3(light.color.r,light.color.g,light.color.b)).mul(inside).mul(float(1).sub(facilityShadow));
+  // Opaque mascot: retain the optical graph but do not show transmitted caustics.
+  material.emissiveNode=albedo.mul(texture(optics.lightTexture,opticalUV).rgb).mul(light.irradiance/Math.PI).mul(vec3(light.color.r,light.color.g,light.color.b)).mul(inside).mul(float(1).sub(facilityShadow)).mul(0);
   const mesh=new THREE.Mesh(new THREE.PlaneGeometry(200,200),material);
   mesh.rotation.x=-Math.PI/2;mesh.position.y=-.00005;
   return {mesh,dispose:()=>{mesh.geometry.dispose();material.dispose();[base,normal,roughness].forEach(t=>t.dispose());}};

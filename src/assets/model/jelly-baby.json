@@ -1,9 +1,9 @@
 {
-  "shape": "droplet",
-  "sourceHash": "429316b791ebcc26b7a89b6b0439e5febf7426bb186301eb834ad49bcae2ef2d",
+  "shape": "mascot",
+  "sourceHash": "e8cf7ef90cc2ab60ea40f6fc991f378c101a1fd3809b5e38b9f792c24792ffa5",
   "scale": 1,
   "bottom": 0,
-  "volume": 0.00010308855277811332,
+  "volume": 0.00009892866409426986,
   "layout": {
     "positions": {
       "offset": 0,
@@ -22,71 +22,71 @@
     },
     "particles": {
       "offset": 290352,
-      "length": 1929,
+      "length": 1896,
       "type": "Float64Array"
     },
     "tets": {
-      "offset": 305784,
-      "length": 9960,
+      "offset": 305520,
+      "length": 9768,
       "type": "Uint32Array"
     },
     "volumes": {
-      "offset": 345624,
-      "length": 2490,
+      "offset": 344592,
+      "length": 2442,
       "type": "Float64Array"
     },
     "bindingIds": {
-      "offset": 365544,
+      "offset": 364128,
       "length": 24200,
       "type": "Uint32Array"
     },
     "bindingWeights": {
-      "offset": 462344,
+      "offset": 460928,
       "length": 24200,
       "type": "Float64Array"
     },
     "tetIds": {
-      "offset": 655944,
+      "offset": 654528,
       "length": 6050,
       "type": "Uint32Array"
     },
     "contacts": {
-      "offset": 680144,
-      "length": 1040,
+      "offset": 678728,
+      "length": 1082,
       "type": "Uint32Array"
     },
     "opticalPositions": {
-      "offset": 684304,
+      "offset": 683056,
       "length": 4470,
       "type": "Float32Array"
     },
     "opticalNormals": {
-      "offset": 702184,
+      "offset": 700936,
       "length": 4470,
       "type": "Float32Array"
     },
     "opticalIndices": {
-      "offset": 720064,
+      "offset": 718816,
       "length": 8928,
       "type": "Uint32Array"
     },
     "opticalBindingIds": {
-      "offset": 755776,
+      "offset": 754528,
       "length": 5960,
       "type": "Uint32Array"
     },
     "opticalBindingWeights": {
-      "offset": 779616,
+      "offset": 778368,
       "length": 5960,
       "type": "Float64Array"
     },
     "thicknessIds": {
-      "offset": 827296,
+      "offset": 826048,
       "length": 18150,
       "type": "Uint32Array"
     },
     "thicknessWeights": {
-      "offset": 899896,
+      "offset": 898648,
       "length": 18150,
       "type": "Float32Array"
     }

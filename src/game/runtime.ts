@@ -51,12 +51,18 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
     }
   };
   const physicsClock=new FixedStepper(PHYS.step);
-  let lastTime=0,disposed=false;
-  const reset=()=>{sound.stopFacilities();sound.reset();input.clear();rig.reset();body.reset();input.recenter();baby.resetFace();physicsClock.reset();splashCooldown=0;splash.clear();puddle.hide();};
+  let lastTime=0,disposed=false,inspectionPaused=false;
+  const reset=()=>{inspectionPaused=false;sound.stopFacilities();sound.reset();input.clear();rig.reset();body.reset();input.recenter();baby.resetFace();physicsClock.reset();splashCooldown=0;splash.clear();puddle.hide();};
   const input=new Input(camera,renderer.domElement,body,baby.mesh,rig,sound,reset);
   if(import.meta.env.DEV)Object.defineProperty(window,'dropletDebug',{configurable:true,get:()=>({
     center:body.center.toArray(),sleeping:body.sleeping,grabs:body.grabs.length,volume:body.volumeRatio(),
     camera:camera.position.toArray(),finite:body.isFinite(),quality:{...quality},
+    // Replay measured physics states for repeatable prototype screenshot review.
+    inspectPose:(positions:number[])=>{
+      if(positions.length!==body.x.length||positions.some(v=>!Number.isFinite(v)))throw new Error('Invalid inspection pose');
+      reset();inspectionPaused=true;body.x.set(positions);body.previous.set(positions);body.velocity.fill(0);body.updateSurface();input.recenter();input.update(10);
+      camera.position.copy(input.controls.target).add(new THREE.Vector3(.025,.13,.27));input.controls.update();
+    },
     thickness:[Math.min(...body.surface.geometry.attributes.opticalThickness.array),Math.max(...body.surface.geometry.attributes.opticalThickness.array)],
     showPuddle:(radius?:number,lifetime?:number)=>puddle.show(body.center,radius??.045,lifetime??1),
     puddleState:{visible:puddle.visible,radius:puddle.radius.value,strength:puddle.strength.value},
@@ -106,7 +112,7 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
       const effectDt=Math.max(0,(time-lastTime)/1000);
       const dt=Math.min(.05,effectDt);lastTime=time;
       if(document.hidden){physicsClock.reset();return;}
-      const steps=physicsClock.advance(dt,()=>{
+      const steps=physicsClock.advance(inspectionPaused?0:dt,()=>{
         input.step(PHYS.step);rig.step(PHYS.step);
         body.step(PHYS.step);input.afterPhysicsStep();rig.afterStep();
       });
