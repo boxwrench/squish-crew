@@ -5,7 +5,8 @@ import { loadBabyCage } from '../physics/baby-cage.ts';
 import { RefractiveLightField } from '../graphics/refractive-light.js';
 import { Baby, ABSORPTION } from '../graphics/baby.ts';
 import { loadEnvironment } from '../graphics/environment.ts';
-import { makeTable } from '../graphics/table.ts';
+import { makeBoilerFloor } from '../graphics/boiler-floor.ts';
+import { makeBoilerRoom } from '../graphics/boiler-room.ts';
 import { Locomotion } from './locomotion.ts';
 import { Input } from './input.ts';
 import { JellySound } from './sound.ts';
@@ -40,7 +41,8 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
   const facilityShadows=new FacilityShadows(environment.incoming);
   const splash=new SplashParticles();scene.add(splash.mesh);
   const puddle=new Puddle();
-  const table=await makeTable(optics,environment,facilityShadows,puddle);scene.add(table.mesh);
+  const table=makeBoilerFloor(optics,environment);scene.add(table.mesh);
+  const boilerRoom=await makeBoilerRoom(scene);
   const composite=createComposite(renderer,scene,camera);
   const rig=new Locomotion(body);
   const reactions=new ReactionGate();
@@ -166,7 +168,7 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
   const dispose=()=>{
     if(disposed)return;disposed=true;
     void renderer.setAnimationLoop(null);input.dispose();sound.dispose();transport.dispose();resizeObserver.disconnect();cancelAnimationFrame(resizeFrame);
-    facilityShadows.dispose();composite.dispose();baby.dispose();table.dispose();splash.dispose();environment.dispose();optics.dispose();renderer.dispose();
+    facilityShadows.dispose();composite.dispose();baby.dispose();table.dispose();boilerRoom.dispose();splash.dispose();environment.dispose();optics.dispose();renderer.dispose();
   };
   window.addEventListener('pagehide',event=>{if(!event.persisted)dispose();});
   if(import.meta.hot)import.meta.hot.dispose(dispose);
