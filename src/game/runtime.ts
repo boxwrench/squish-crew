@@ -60,12 +60,12 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
     center:body.center.toArray(),sleeping:body.sleeping,grabs:body.grabs.length,volume:body.volumeRatio(),
     camera:camera.position.toArray(),finite:body.isFinite(),quality:{...quality},
     legs:baby.legs.debug,
-    inspectLegPose:(pose:{positions:number[];legState:LegSnapshot;armState?:ReturnType<typeof baby.arms.snapshot>})=>{
+    inspectLegPose:(pose:{positions:number[];legState:LegSnapshot;armState?:ReturnType<typeof baby.arms.snapshot>;view?:[number,number,number]})=>{
       const positions=pose.positions;
       if(positions.length!==body.x.length||positions.some(v=>!Number.isFinite(v)))throw new Error('Invalid inspection pose');
       reset();inspectionPaused=true;body.x.set(positions);body.previous.set(positions);body.velocity.fill(0);body.updateSurface();
       baby.resetFace();baby.legs.restoreInspection(pose.legState);if(pose.armState)baby.arms.restoreInspection(pose.armState);input.recenter();input.update(10);
-      camera.position.copy(input.controls.target).add(new THREE.Vector3(.025,.11,.23));input.controls.update();
+      camera.position.copy(input.controls.target).add(new THREE.Vector3(...(pose.view??[.025,.11,.23] as const)));input.controls.update();
     },
     // Replay measured physics states for repeatable prototype screenshot review.
     inspectPose:(positions:number[])=>{

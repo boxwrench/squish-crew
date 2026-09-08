@@ -9,9 +9,9 @@ export class MascotHead {
   private readonly pieces:{anchor:SurfaceAttachment;group:THREE.Group}[]=[];
   constructor(body:SoftBody,parent:THREE.Group) {
     const material=(color:string,roughness=.8)=>new THREE.MeshStandardNodeMaterial({color,roughness});
-    const skin=material('#d49a76'),cheek=material('#ce8868'),hair=material('#35281f');
-    const navy=material('#182d49'),navyEdge=material('#233d5b');
-    const frame=material('#252a2d',.45),lens=material('#101c24',.2),cream=material('#efcc92');
+    const skin=material('#d49a76'),cheek=material('#cf9471'),hair=material('#151513');
+    const navy=material('#13233c'),navyEdge=material('#1b304a');
+    const frame=material('#252a2d',.4),lens=material('#081219',.22),white=material('#f6f5ed');
     const sphere=new THREE.SphereGeometry(1,16,10);
     const add=(group:THREE.Group,geometry:THREE.BufferGeometry,mat:THREE.Material,
       position:number[],scale?:number[])=>{
@@ -27,25 +27,38 @@ export class MascotHead {
     for(const sign of [-1,1]) {
       // Separate lens bindings keep both sides on the face during wide pulls.
       const glasses=piece([sign*.0065,.0675,.018]);
-      add(glasses,new RoundedBoxGeometry(.0118,.0079,.002,2,.0016),frame,[0,0,.0018]);
-      add(glasses,new RoundedBoxGeometry(.0101,.0062,.0008,2,.0015),lens,[0,0,.003]);
+      // Broad brow and a rounded descending lobe give each lens an aviator
+      // silhouette. Mirroring the outline keeps the narrow corners by the nose.
+      const aviator=new THREE.Shape();
+      aviator.moveTo(-sign*.88,.52);
+      aviator.bezierCurveTo(-sign*.55,.88,sign*.66,.88,sign*.96,.38);
+      aviator.bezierCurveTo(sign*1.1,-.18,sign*.72,-.93,sign*.15,-.98);
+      aviator.bezierCurveTo(-sign*.4,-1,-sign*.96,-.21,-sign*.88,.52);
+      const lensGeometry=new THREE.ExtrudeGeometry(aviator,{depth:.12,bevelEnabled:false,curveSegments:10});
+      add(glasses,lensGeometry,frame,[0,0,.002],[.0061,.0046,.006]);
+      add(glasses,lensGeometry,lens,[0,0,.0029],[.00555,.004,.002]);
       const temple=piece([sign*.013,.0675,.011]);
       add(temple,new RoundedBoxGeometry(.0011,.0011,.008,1,.0004),frame,[sign*.0008,0,-.001]);
       const blush=piece([sign*.0085,.062,.017]);
-      add(blush,sphere,cheek,[0,0,.0001],[.0034,.0025,.0014]);
+      add(blush,sphere,cheek,[0,0,.0001],[.0034,.0023,.001]);
       const mustache=piece([sign*.0026,.0616,.02]);
-      const whisker=add(mustache,sphere,hair,[0,0,.0011],[.0035,.0014,.0016]);
-      whisker.rotation.z=-sign*.17;
+      const whisker=add(mustache,sphere,hair,[0,0,.0013],[.0037,.00145,.00155]);
+      whisker.rotation.z=-sign*.22;
     }
     const bridge=piece([0,.068,.02]);
     add(bridge,new RoundedBoxGeometry(.0035,.0011,.001,1,.0003),frame,[0,0,.0019]);
     const nose=piece([0,.0642,.02]);
     add(nose,sphere,skin,[0,0,.0013],[.0028,.0023,.0032]);
-    const chin=piece([0,.0594,.018]);
-    add(chin,sphere,hair,[0,0,.0008],[.0038,.0027,.0015]);
+    const chin=piece([0,.0601,.022]);
+    const beard=new THREE.Shape();
+    beard.moveTo(-.0042,.0012);beard.quadraticCurveTo(0,.002,.0042,.0012);
+    beard.bezierCurveTo(.0046,-.0015,.0022,-.0042,0,-.0044);
+    beard.bezierCurveTo(-.0022,-.0042,-.0046,-.0015,-.0042,.0012);
+    // Clear the belly's increasing radius beneath the chin so the rounded tip
+    // stays continuous instead of intersecting the shirt at its lower edge.
+    add(chin,new THREE.ExtrudeGeometry(beard,{depth:.0009,bevelEnabled:true,bevelThickness:.00035,bevelSize:.0003,bevelSegments:2,steps:1,curveSegments:10}),hair,[0,0,.0025]);
     // Small lower lip separates the mustache and goatee into a friendly face.
-    const mouth=piece([0,.0598,.022]);
-    add(mouth,sphere,skin,[0,0,.0013],[.0025,.00065,.0012]);
+    add(chin,sphere,skin,[0,-.0001,.0036],[.0025,.0006,.00065]);
 
     const cap=piece([0,.078,0]);
     cap.name='mascot-cap-39';
@@ -59,20 +72,15 @@ export class MascotHead {
     add(cap,sphere,navy,[0,-.0063,.012],[.017,.0012,.011]);
     add(cap,sphere,navyEdge,[0,.0042,0],[.0015,.0007,.0015]);
 
-    // Simple cream "39": seven-segment geometry remains crisp without fonts,
-    // network assets, DOM/canvas, or reusing the full IUOE logo.
+    // Rounded white numeral strokes read as stitched cap lettering. These are
+    // local procedural curves, with no fonts, canvas, or full IUOE logo.
     const digits=new THREE.Group();digits.position.set(0,-.0009,.0134);cap.add(digits);
-    // Horizontal segments are located explicitly in cap-local XY.
-    const segments=[[0,1,0],[1,.5,1],[1,-.5,1],[0,-1,0],[-1,-.5,1],[-1,.5,1],[0,0,0]];
-    const barGeometry=new RoundedBoxGeometry(.0026,.0007,.00045,1,.00015);
-    for(const [digit,offset] of [['3',-.0025],['9',.0025]] as const) {
-      const enabled=digit==='3'?[0,1,2,3,6]:[0,1,2,3,5,6];
-      for(const index of enabled) {
-        const [x,y,vertical]=segments[index];
-        const bar=add(digits,barGeometry,cream,[offset+x*.0013,y*.0021,0]);
-        if(vertical){bar.rotation.z=Math.PI/2;bar.scale.x=.79;}
-      }
-    }
+    const stroke=(points:number[][],offset:number)=>{
+      const path=new THREE.CatmullRomCurve3(points.map(([x,y])=>new THREE.Vector3(x*.0014,y*.0022,0)));
+      add(digits,new THREE.TubeGeometry(path,28,.00042,6,false),white,[offset,0,0]);
+    };
+    stroke([[-.9,.86],[.4,1],[.95,.58],[.45,.08],[-.2,0],[.5,-.1],[.98,-.61],[.35,-1],[-.94,-.86]],-.0025);
+    stroke([[.9,.38],[.5,1],[-.6,.92],[-.95,.4],[-.45,0],[.6,.08],[.9,.38],[.8,-.5],[.3,-.94],[-.75,-.92]],.0025);
     this.update();
   }
   update() {
