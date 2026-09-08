@@ -199,9 +199,15 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
   // Keep collision source geometry/transforms exactly as authored. Drawing
   // only its inner face makes the room disappear correctly from outside.
   for(const object of solidWalls) {
-    const source=object as THREE.Mesh,bounds=source.geometry.boundingBox!;
+    const source=object as THREE.Mesh;
+    // Computed here rather than relying on wallSlab having run first.
+    source.geometry.computeBoundingBox();
+    const bounds=source.geometry.boundingBox!;
     const size=bounds.getSize(new THREE.Vector3()),localCenter=bounds.getCenter(new THREE.Vector3());
     const dimensions=[size.x,size.y,size.z],thin=dimensions.indexOf(Math.min(...dimensions));
+    // A wall authored as a plane is already the single-sided face we would
+    // build, so it is kept and drawn as-is instead of being hidden behind a copy.
+    if(dimensions[thin]<1e-9)continue;
     const axis=new THREE.Vector3().setFromMatrixColumn(source.matrixWorld,thin).normalize();
     const worldCenter=localCenter.clone().applyMatrix4(source.matrixWorld);
     const inward=axis.dot(worldCenter)<0?1:-1;

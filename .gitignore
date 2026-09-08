@@ -1,3 +1,4 @@
 node_modules/
 dist/
 *.log
+/Steam_Valve_Open.mp3
