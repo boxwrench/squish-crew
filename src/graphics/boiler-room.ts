@@ -61,6 +61,9 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
   };
   const box=(w:number,h:number,d:number,mat:THREE.Material,x:number,y:number,z:number,r=.003)=>
     mesh(new RoundedBoxGeometry(w,h,d,2,r),mat,x,y,z);
+  const plane=(w:number,h:number,mat:THREE.Material,x:number,y:number,z:number,yaw=0)=>{
+    const m=mesh(new THREE.PlaneGeometry(w,h),mat,x,y,z);m.rotation.y=yaw;return m;
+  };
   const cylinder=(radius:number,length:number,mat:THREE.Material,x:number,y:number,z:number)=>
     mesh(new THREE.CylinderGeometry(radius,radius,length,16),mat,x,y,z);
   const disc=(radius:number,depth:number,mat:THREE.Material,x:number,y:number,z:number)=>{
@@ -93,10 +96,10 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
   // direction. Machinery keeps its close composition inside this larger room.
   const roomWidth=3.2,roomHeight=1.4,back=-1.0,front=1.2,roomDepth=front-back;
   solid(box(roomWidth,roomHeight,.012,wall,0,roomHeight/2,back,.001));
-  box(roomWidth,.065,.003,lowerWall,0,.034,back+.008,.001);
-  box(roomWidth,.018,.017,trim,0,.009,back+.01,.001);
+  plane(roomWidth,.065,lowerWall,0,.034,back+.008);
+  plane(roomWidth,.018,trim,0,.009,back+.01);
   solid(box(roomWidth,roomHeight,.012,wall,0,roomHeight/2,front,.001));
-  box(roomWidth,.018,.017,trim,0,.009,front-.01,.001);
+  plane(roomWidth,.018,trim,0,.009,front-.01,Math.PI);
   // A broad single-sided service wall preserves the close mounted-machinery
   // composition; from behind it vanishes so an orbit still sees the mascot.
   solid(mesh(new THREE.PlaneGeometry(roomWidth,roomHeight),wall,0,roomHeight/2,-.196));
@@ -104,8 +107,8 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
   mesh(new THREE.PlaneGeometry(roomWidth,.012),trim,0,.006,-.194);
   for(const sign of [-1,1]) {
     solid(box(.012,roomHeight,roomDepth,wall,sign*roomWidth/2,roomHeight/2,(front+back)/2,.001));
-    box(.003,.065,roomDepth,lowerWall,sign*(roomWidth/2-.008),.034,(front+back)/2,.001);
-    box(.016,.018,roomDepth,trim,sign*(roomWidth/2-.015),.009,(front+back)/2,.001);
+    plane(roomDepth,.065,lowerWall,sign*(roomWidth/2-.008),.034,(front+back)/2,-sign*Math.PI/2);
+    plane(roomDepth,.018,trim,sign*(roomWidth/2-.015),.009,(front+back)/2,-sign*Math.PI/2);
     // Small conduit/junction silhouettes continue the room without competing
     // with the boiler, mascot, or the single union sign.
     pipe([[sign*.35,.014,-.181],[sign*.35,.204,-.181],[sign*.374,.222,-.24],[sign*1.55,.222,-.96],[sign*1.57,.222,.96]],.0026,trim);
@@ -113,10 +116,38 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
     box(.013,.020,.002,trim,sign*.35,.114,-.1725,.001);
   }
   // Quiet wall seams keep the machinery readable without a busy brick pattern.
-  for(const x of [-1.2,-.6,0,.6,1.2])box(.002,roomHeight,.002,lowerWall,x,roomHeight/2,back+.008,.0004);
-  box(roomWidth,.004,.004,trim,0,.231,back+.011,.001);
-  box(roomWidth,.003,.004,trim,0,.067,back+.012,.001);
+  for(const x of [-1.2,-.6,0,.6,1.2])plane(.002,roomHeight,lowerWall,x,roomHeight/2,back+.008);
+  plane(roomWidth,.004,trim,0,.231,back+.011);
+  plane(roomWidth,.003,trim,0,.067,back+.012);
   pipe([[-1.56,.36,.90],[-1.56,.36,-.91],[-1.48,.36,-.96],[1.48,.36,-.96],[1.56,.36,-.91],[1.56,.36,.90]],.008,dark);
+
+  // Small distinct service clusters make each orbit direction recognizable.
+  // Helpers author in a local front-facing frame, then rotate onto each wall.
+  const cluster=(x:number,z:number,yaw:number,build:()=>void)=>{
+    const first=room.children.length;build();const parts=room.children.slice(first),group=new THREE.Group();
+    group.name='perimeter-service-details';group.add(...parts);group.position.set(x,0,z);group.rotation.y=yaw;room.add(group);
+  };
+  cluster(-.85,back+.028,0,()=>{
+    pipe([[-.045,.025,0],[-.045,.28,0],[-.026,.30,0],[.15,.30,0]],.004,copper);
+    box(.059,.077,.012,steel,.025,.145,.002,.004);
+    box(.044,.061,.002,trim,.025,.145,.009,.002);
+    box(.009,.003,.002,dark,.040,.145,.011,.0005);
+  });
+  cluster(-roomWidth/2+.027,.38,Math.PI/2,()=>{
+    pipe([[-.12,.035,0],[-.12,.19,0],[-.095,.21,0],[.085,.21,0],[.11,.24,0],[.11,.42,0]],.005,steel);
+    box(.028,.044,.012,trim,.11,.30,.004,.002);
+    pipe([[-.095,.022,0],[-.095,.17,0],[-.07,.185,0],[.025,.185,0]],.0025,copper);
+  });
+  cluster(roomWidth/2-.027,.61,-Math.PI/2,()=>{
+    pipe([[0,.025,0],[0,.32,0],[.02,.34,0],[.17,.34,0]],.006,copper);
+    pipe([[0,.17,0],[-.04,.17,.007],[-.055,.193,.007]],.0025,dark);
+    gauge(-.055,.211,.008,.013);
+  });
+  cluster(.53,front-.026,Math.PI,()=>{
+    pipe([[-.15,.30,0],[.09,.30,0],[.115,.276,0],[.115,.022,0]],.0065,steel);
+    wheel(.115,.135,.014,.016);
+    box(.011,.024,.009,trim,-.09,.30,-.004,.001);
+  });
 
   // Rounded, squat boiler with a warm, contained furnace window.
   const boilerStart=room.children.length;
@@ -165,6 +196,21 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
 
   room.updateMatrixWorld(true);
   const collisionBoxes:CollisionBox[]=solidWalls.map(wallSlab);
+  // Keep collision source geometry/transforms exactly as authored. Drawing
+  // only its inner face makes the room disappear correctly from outside.
+  for(const object of solidWalls) {
+    const source=object as THREE.Mesh,bounds=source.geometry.boundingBox!;
+    const size=bounds.getSize(new THREE.Vector3()),localCenter=bounds.getCenter(new THREE.Vector3());
+    const dimensions=[size.x,size.y,size.z],thin=dimensions.indexOf(Math.min(...dimensions));
+    const axis=new THREE.Vector3().setFromMatrixColumn(source.matrixWorld,thin).normalize();
+    const worldCenter=localCenter.clone().applyMatrix4(source.matrixWorld);
+    const inward=axis.dot(worldCenter)<0?1:-1;
+    const normal=new THREE.Vector3().setComponent(thin,inward);
+    localCenter.addScaledVector(normal,dimensions[thin]/2).applyMatrix4(source.matrix);
+    const face=mesh(new THREE.PlaneGeometry(thin===0?size.z:size.x,size.y),source.material as THREE.Material,localCenter.x,localCenter.y,localCenter.z);
+    face.name='wall-inner-face';face.quaternion.copy(source.quaternion).multiply(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1),normal));
+    face.scale.copy(source.scale);source.visible=false;
+  }
 
   return {collisionBoxes,
     dispose(){scene.remove(room);for(const g of geometries)g.dispose();for(const m of materials)m.dispose();texture.dispose();}};
