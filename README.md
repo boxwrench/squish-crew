@@ -4,9 +4,13 @@ A mobile-first soft mascot physics toy with one round, deformable bean-person
 body, built on the inherited Droppie WebGPU engine and interaction architecture.
 
 The opaque skin/navy/denim prototype now has two tiny spring-driven legs and
-chunky brown boots. The settled body measures about 73 × 59 × 48 mm (height ×
+chunky brown boots, short lagging arms, sunglasses, facial hair, and a navy `39`
+cap. Surface-bound collar, pockets and buttons define the work shirt above the
+jeans. The settled body measures about 73 × 59 × 48 mm (height ×
 width × depth). See [Phase 2 measurements](docs/phase-2.md) and
 [Phase 3 legs](docs/phase-3.md) for tuning, validation and limitations.
+The [attached character details](docs/character-details.md) extend that same
+surface-binding approach without changing the physical body.
 The inherited Droppie tutorials below describe the technical lineage; their
 water-material discussion is historical, not the current character material.
 

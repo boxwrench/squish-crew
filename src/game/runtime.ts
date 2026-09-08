@@ -60,17 +60,17 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
     center:body.center.toArray(),sleeping:body.sleeping,grabs:body.grabs.length,volume:body.volumeRatio(),
     camera:camera.position.toArray(),finite:body.isFinite(),quality:{...quality},
     legs:baby.legs.debug,
-    inspectLegPose:(pose:{positions:number[];legState:LegSnapshot})=>{
+    inspectLegPose:(pose:{positions:number[];legState:LegSnapshot;armState?:ReturnType<typeof baby.arms.snapshot>})=>{
       const positions=pose.positions;
       if(positions.length!==body.x.length||positions.some(v=>!Number.isFinite(v)))throw new Error('Invalid inspection pose');
       reset();inspectionPaused=true;body.x.set(positions);body.previous.set(positions);body.velocity.fill(0);body.updateSurface();
-      baby.legs.restoreInspection(pose.legState);input.recenter();input.update(10);
+      baby.resetFace();baby.legs.restoreInspection(pose.legState);if(pose.armState)baby.arms.restoreInspection(pose.armState);input.recenter();input.update(10);
       camera.position.copy(input.controls.target).add(new THREE.Vector3(.025,.11,.23));input.controls.update();
     },
     // Replay measured physics states for repeatable prototype screenshot review.
     inspectPose:(positions:number[])=>{
       if(positions.length!==body.x.length||positions.some(v=>!Number.isFinite(v)))throw new Error('Invalid inspection pose');
-      reset();inspectionPaused=true;body.x.set(positions);body.previous.set(positions);body.velocity.fill(0);body.updateSurface();baby.legs.reset();input.recenter();input.update(10);
+      reset();inspectionPaused=true;body.x.set(positions);body.previous.set(positions);body.velocity.fill(0);body.updateSurface();baby.resetFace();input.recenter();input.update(10);
       camera.position.copy(input.controls.target).add(new THREE.Vector3(.025,.13,.27));input.controls.update();
     },
     thickness:[Math.min(...body.surface.geometry.attributes.opticalThickness.array),Math.max(...body.surface.geometry.attributes.opticalThickness.array)],
@@ -145,10 +145,10 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
       const faceVersion=baby.group.children.reduce((sum,child)=>sum+(((child as THREE.Mesh).geometry?.attributes.position as THREE.BufferAttribute|undefined)?.version??0),0);
       const thicknessVersion=body.surface.geometry.attributes.opticalThickness.version;
       const size=renderer.domElement.width+','+renderer.domElement.height;
-      if(!body.sleeping||splash.active||puddleChanged||renderedLegs!==baby.legs.revision||renderedSurface!==body.surfaceRevision||renderedFace!==faceVersion||
+      if(!body.sleeping||splash.active||puddleChanged||renderedLegs!==baby.accessoryRevision||renderedSurface!==body.surfaceRevision||renderedFace!==faceVersion||
         renderedThickness!==thicknessVersion||renderedDpr!==renderer.getPixelRatio()||renderedSize!==size||
         renderedCamera.distanceToSquared(camera.position)>1e-12||renderedRotation.angleTo(camera.quaternion)>1e-6) {
-        composite.render();renderedSurface=body.surfaceRevision;renderedFace=faceVersion;renderedLegs=baby.legs.revision;
+        composite.render();renderedSurface=body.surfaceRevision;renderedFace=faceVersion;renderedLegs=baby.accessoryRevision;
         renderedThickness=thicknessVersion;renderedDpr=renderer.getPixelRatio();renderedSize=size;
         renderedCamera.copy(camera.position);renderedRotation.copy(camera.quaternion);
       }

@@ -1,6 +1,9 @@
 import * as THREE from 'three/webgpu';
 import type { SoftBody } from '../physics/soft-body.js';
 import { MascotLegs } from './mascot-legs.ts';
+import { MascotArms } from './mascot-arms.ts';
+import { MascotHead } from './mascot-head.ts';
+import { MascotClothes } from './mascot-clothes.ts';
 import { DEFAULT_JELLY_FLAVOR, JELLY_FLAVORS, type JellyFlavorName } from './jelly-flavors.ts';
 
 export const ABSORPTION=JELLY_FLAVORS[DEFAULT_JELLY_FLAVOR].absorption;
@@ -11,6 +14,9 @@ export class Baby {
   private readonly jellyMaterial:THREE.MeshPhysicalNodeMaterial;
   readonly body:SoftBody;
   readonly legs:MascotLegs;
+  readonly arms:MascotArms;
+  readonly head:MascotHead;
+  readonly clothes:MascotClothes;
   constructor(body:SoftBody) {
     this.body=body;
     const material=new THREE.MeshPhysicalNodeMaterial({
@@ -21,8 +27,11 @@ export class Baby {
     this.jellyMaterial=material;
     const colors=new Float32Array(body.surface.positions.length),color=new THREE.Color();
     for(let i=0;i<colors.length;i+=3) {
-      const y=body.surface.positions[i+1];
-      color.set(y>.058?'#c58f69':y<.020?'#345775':'#203d60');
+      const x=body.surface.positions[i],y=body.surface.positions[i+1],z=body.surface.positions[i+2];
+      // Rounded untucked hem falls over the jeans at the front and back.
+      const hem=.020+.004*Math.min(1,(x/.029)**2);
+      const seam=Math.abs(y-hem)<.0006;
+      color.set(y>.056?'#c58f69':seam?'#172e46':y<hem?(Math.abs(x)<.0006&&z>0?'#243e58':'#345775'):'#203d60');
       color.toArray(colors,i);
     }
     body.surface.geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));
@@ -30,6 +39,9 @@ export class Baby {
     this.mesh.renderOrder=1;
     this.mesh.frustumCulled=false;this.group.add(this.mesh);
     this.legs=new MascotLegs(body,this.group);
+    this.arms=new MascotArms(body,this.group);
+    this.head=new MascotHead(body,this.group);
+    this.clothes=new MascotClothes(body,this.group);
     this.update();
   }
   setFlavor(flavor:JellyFlavorName) {
@@ -40,8 +52,9 @@ export class Baby {
       THREE.LinearSRGBColorSpace,
     );
   }
-  update(dt=0) { this.legs.update(dt); }
-  resetFace() { this.legs.reset(); }
+  get accessoryRevision(){return this.legs.revision+this.arms.revision+this.head.revision+this.clothes.revision;}
+  update(dt=0) { this.legs.update(dt);this.arms.update(dt);this.head.update();this.clothes.update(); }
+  resetFace() { this.legs.reset();this.arms.reset();this.head.update();this.clothes.update(); }
   dispose() {
     this.group.traverse(object=>{
       if(object instanceof THREE.Mesh) {

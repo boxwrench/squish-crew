@@ -12,6 +12,7 @@
     "test:physics": "node --experimental-strip-types scripts/verify-droplet.mjs",
     "test:mascot": "node scripts/verify-mascot.mjs",
     "test:legs": "node scripts/verify-legs.mjs",
+    "test:character": "node scripts/verify-character.mjs",
     "test:swing": "node --experimental-strip-types scripts/verify-swing.mjs",
     "test:trampoline": "node --experimental-strip-types scripts/verify-trampoline.mjs",
     "test:facility-collision": "node --experimental-strip-types scripts/verify-facility-collision.mjs",
