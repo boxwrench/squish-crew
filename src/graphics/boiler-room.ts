@@ -1,13 +1,48 @@
 import * as THREE from 'three/webgpu';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { float, positionWorld, vec3 } from 'three/tsl';
+import type { CollisionBox } from '../physics/facility-collision.ts';
 
-/** Decorative workshop scenery only: no contacts, updates, or extra solver. */
+// The visible walls are only a few millimetres thick. Collision uses a slab
+// whose inner face sits exactly on the visible face and which extends this far
+// outward, so a hard throw cannot pass through between two physics substeps.
+const WALL_SLAB_DEPTH=.3;
+
+/**
+ * Derive a world-space collision slab from a wall mesh's own transform, so the
+ * volume follows the authored geometry and the room group's scale/offset
+ * instead of repeating coordinates that can drift away from the visuals.
+ */
+function wallSlab(object:THREE.Object3D):CollisionBox {
+  const geometry=(object as THREE.Mesh).geometry;
+  geometry.computeBoundingBox();
+  const bounds=geometry.boundingBox!;
+  const center=bounds.getCenter(new THREE.Vector3()).applyMatrix4(object.matrixWorld);
+  const size=bounds.getSize(new THREE.Vector3());
+  const axes=[0,1,2].map(i=>new THREE.Vector3().setFromMatrixColumn(object.matrixWorld,i));
+  const half=[size.x,size.y,size.z].map((value,i)=>value*axes[i].length()/2);
+  for(const axis of axes)axis.normalize();
+  // The thin axis is the wall's face normal; thicken along it, away from the
+  // room's interior, which leaves the inner face exactly where it is drawn.
+  const thin=half.indexOf(Math.min(...half));
+  const outward=axes[thin].dot(center)<0?-1:1;
+  axes[thin].multiplyScalar(outward);
+  center.addScaledVector(axes[thin],WALL_SLAB_DEPTH/2-half[thin]);
+  half[thin]=WALL_SLAB_DEPTH/2;
+  return {center,xAxis:axes[0],yAxis:axes[1],zAxis:axes[2],
+    halfSize:new THREE.Vector3(half[0],half[1],half[2])};
+}
+
+/** Decorative workshop scenery, plus solid collision slabs for the walls. */
 export async function makeBoilerRoom(scene:THREE.Scene) {
   const room=new THREE.Group();room.name='decorative-boiler-room';scene.add(room);
   // A compact set fits the close, downward-looking gameplay camera.
   room.scale.set(.5,.5,.6);room.position.z=.035;
   const materials:THREE.Material[]=[],geometries:THREE.BufferGeometry[]=[];
+  // Perimeter and service walls only: pipes, valves, gauges and trim stay
+  // purely decorative so the mascot never snags on scenery detail.
+  const solidWalls:THREE.Object3D[]=[];
+  const solid=<T extends THREE.Object3D>(object:T)=>{solidWalls.push(object);return object;};
   const material=(color:string,roughness=.8,metalness=0)=>{
     const m=new THREE.MeshStandardNodeMaterial({color,roughness,metalness});
     // Broad finish variation, not grime or a high-frequency noise texture.
@@ -57,18 +92,18 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
   // The outer shell exceeds the maximum .42m camera orbit in every horizontal
   // direction. Machinery keeps its close composition inside this larger room.
   const roomWidth=3.2,roomHeight=1.4,back=-1.0,front=1.2,roomDepth=front-back;
-  box(roomWidth,roomHeight,.012,wall,0,roomHeight/2,back,.001);
+  solid(box(roomWidth,roomHeight,.012,wall,0,roomHeight/2,back,.001));
   box(roomWidth,.065,.003,lowerWall,0,.034,back+.008,.001);
   box(roomWidth,.018,.017,trim,0,.009,back+.01,.001);
-  box(roomWidth,roomHeight,.012,wall,0,roomHeight/2,front,.001);
+  solid(box(roomWidth,roomHeight,.012,wall,0,roomHeight/2,front,.001));
   box(roomWidth,.018,.017,trim,0,.009,front-.01,.001);
   // A broad single-sided service wall preserves the close mounted-machinery
   // composition; from behind it vanishes so an orbit still sees the mascot.
-  mesh(new THREE.PlaneGeometry(roomWidth,roomHeight),wall,0,roomHeight/2,-.196);
+  solid(mesh(new THREE.PlaneGeometry(roomWidth,roomHeight),wall,0,roomHeight/2,-.196));
   mesh(new THREE.PlaneGeometry(roomWidth,.065),lowerWall,0,.0325,-.195);
   mesh(new THREE.PlaneGeometry(roomWidth,.012),trim,0,.006,-.194);
   for(const sign of [-1,1]) {
-    box(.012,roomHeight,roomDepth,wall,sign*roomWidth/2,roomHeight/2,(front+back)/2,.001);
+    solid(box(.012,roomHeight,roomDepth,wall,sign*roomWidth/2,roomHeight/2,(front+back)/2,.001));
     box(.003,.065,roomDepth,lowerWall,sign*(roomWidth/2-.008),.034,(front+back)/2,.001);
     box(.016,.018,roomDepth,trim,sign*(roomWidth/2-.015),.009,(front+back)/2,.001);
     // Small conduit/junction silhouettes continue the room without competing
@@ -128,5 +163,9 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
     part.scale.multiplyScalar(signScale);
   }
 
-  return {dispose(){scene.remove(room);for(const g of geometries)g.dispose();for(const m of materials)m.dispose();texture.dispose();}};
+  room.updateMatrixWorld(true);
+  const collisionBoxes:CollisionBox[]=solidWalls.map(wallSlab);
+
+  return {collisionBoxes,
+    dispose(){scene.remove(room);for(const g of geometries)g.dispose();for(const m of materials)m.dispose();texture.dispose();}};
 }

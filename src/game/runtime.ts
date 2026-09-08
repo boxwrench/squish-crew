@@ -15,6 +15,7 @@ import { OpticalTransport } from '../graphics/transport.ts';
 import { createComposite } from '../graphics/composite.ts';
 import { FixedStepper } from './fixed-step.ts';
 import { SplashParticles } from '../water/splash-particles.ts';
+import { FacilityCollision, type CollisionBox } from '../physics/facility-collision.ts';
 import { ReactionGate, REACTION, hardImpact } from './reactions.ts';
 import { quality, observeFrame } from '../graphics/quality.ts';
 import type { LegSnapshot } from '../graphics/mascot-legs.ts';
@@ -39,6 +40,23 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
   const splash=new SplashParticles();scene.add(splash.mesh);
   const floor=makeBoilerFloor(optics,environment);scene.add(floor.mesh);
   const boilerRoom=await makeBoilerRoom(scene);
+  // The room's walls are solid, through the same narrow-phase the swing and
+  // trampoline use. A centre-distance broad phase keeps the 1.4k-sample pass
+  // off the substep entirely until he is actually near a wall.
+  const walls=new FacilityCollision(body);
+  const nearbyWalls:CollisionBox[]=[];
+  const WALL_REACH=.07;
+  const wallsNearBody=()=>{
+    nearbyWalls.length=0;
+    for(const wall of boilerRoom.collisionBoxes) {
+      const dx=body.center.x-wall.center.x,dy=body.center.y-wall.center.y,dz=body.center.z-wall.center.z;
+      const qx=Math.abs(dx*wall.xAxis.x+dy*wall.xAxis.y+dz*wall.xAxis.z)-wall.halfSize.x;
+      const qy=Math.abs(dx*wall.yAxis.x+dy*wall.yAxis.y+dz*wall.yAxis.z)-wall.halfSize.y;
+      const qz=Math.abs(dx*wall.zAxis.x+dy*wall.zAxis.y+dz*wall.zAxis.z)-wall.halfSize.z;
+      if(Math.max(qx,qy,qz)<WALL_REACH)nearbyWalls.push(wall);
+    }
+    return nearbyWalls;
+  };
   const composite=createComposite(renderer,scene,camera);
   const rig=new Locomotion(body);
   const reactions=new ReactionGate();
@@ -65,6 +83,9 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
     center:body.center.toArray(),sleeping:body.sleeping,grabs:body.grabs.length,volume:body.volumeRatio(),
     camera:camera.position.toArray(),finite:body.isFinite(),quality:{...quality},
     legs:baby.legs.debug,squirmTime:baby.squirm.time,
+    walls:boilerRoom.collisionBoxes.map(w=>({center:[w.center.x,w.center.y,w.center.z],
+      half:[w.halfSize.x,w.halfSize.y,w.halfSize.z],
+      axes:[[w.xAxis.x,w.xAxis.y,w.xAxis.z],[w.yAxis.x,w.yAxis.y,w.yAxis.z],[w.zAxis.x,w.zAxis.y,w.zAxis.z]]})),
     inspectLegPose:(pose:{positions:number[];legState:LegSnapshot;armState?:ReturnType<typeof baby.arms.snapshot>;view?:[number,number,number];animateAccessories?:boolean})=>{
       const positions=pose.positions;
       if(positions.length!==body.x.length||positions.some(v=>!Number.isFinite(v)))throw new Error('Invalid inspection pose');
@@ -125,7 +146,7 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
       if(document.hidden){physicsClock.reset();return;}
       const steps=physicsClock.advance(inspectionPaused?0:dt,()=>{
         input.step(PHYS.step);rig.step(PHYS.step);
-        body.step(PHYS.step);input.afterPhysicsStep();rig.afterStep();
+        body.step(PHYS.step);walls.resolveBoxes(wallsNearBody());input.afterPhysicsStep();rig.afterStep();
       });
       if(steps&&body.surfaceDirty) {
         if(!body.isFinite())throw new Error('The soft-body simulation produced an invalid state');

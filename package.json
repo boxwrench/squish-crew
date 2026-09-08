@@ -15,6 +15,7 @@
     "test:character": "node scripts/verify-character.mjs",
     "test:swing": "node --experimental-strip-types scripts/verify-swing.mjs",
     "test:trampoline": "node --experimental-strip-types scripts/verify-trampoline.mjs",
+    "test:walls": "node --experimental-strip-types scripts/verify-walls.mjs",
     "test:facility-collision": "node --experimental-strip-types scripts/verify-facility-collision.mjs",
     "test:facility-shadows": "node --experimental-strip-types scripts/verify-facility-shadows.mjs",
     "test:facility-sound": "node --experimental-strip-types scripts/verify-facility-sound.mjs",
