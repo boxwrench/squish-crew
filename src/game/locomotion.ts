@@ -30,6 +30,30 @@ export const PLOP = {
   release: .80,
 };
 
+/**
+ * Experimental: a very short softening of the elastic shear response across the
+ * impact frame itself, so the landing compresses further before the plop takes
+ * over. Bulk is untouched, so this is shape deformation and not volume
+ * collapse, and the window is far shorter than the plop's flattened beat.
+ *
+ * Shear is already a per-step argument of both the WebAssembly kernel and the
+ * JavaScript fallback, so this rides the existing stepPhys override path and
+ * needs no solver or kernel change.
+ *
+ * Measured against the plop alone on the hardest drop a pointer can produce:
+ * peak height .590 -> .530 of rest and spread 1.297 -> 1.378, with minimum
+ * Jacobian .1202 -> .1224 and volume floor .924 -> .920. It is not free -
+ * softening the compression stores energy that comes back, so rebound rises
+ * 38.0mm -> 49.7mm and the post-landing slide 56mm -> 69mm. That trade is the
+ * reason this lives in its own commit.
+ */
+export const IMPACT_SOFTEN = {
+  /** Shear multiplier at the peak of a fully saturated impact. */
+  shear: .35,
+  /** Seconds of softened response. Ends by returning shearScale to exactly 1. */
+  window: .08,
+};
+
 /** Soft recovery around the mass center, with no directional locomotion. */
 export class Locomotion {
   readonly move=new Vector3();
@@ -46,6 +70,8 @@ export class Locomotion {
   private lastImpact=-1;
   private plopStrength=0;
   private plopTime=0;
+  private softenStrength=0;
+  private softenTime=-1;
   onContact:(speed:number,foot:boolean)=>void=()=>{};
   readonly body:SoftBody;
   constructor(body:SoftBody) {
@@ -53,7 +79,8 @@ export class Locomotion {
     for(let i=0;i<body.mass.length;i++) this.restCenter.addScaledVector(new Vector3().fromArray(body.rest,i*3),body.mass[i]/body.totalMass);
   }
   jump() { this.jumpQueued=true;this.body.wake(); }
-  reset() { this.yaw=0;this.phase=0;this.jumpCooldown=0;this.jumpQueued=false;this.releasedFor=1;this.move.set(0,0,0);this.plopStrength=0;this.plopTime=0; }
+  reset() { this.yaw=0;this.phase=0;this.jumpCooldown=0;this.jumpQueued=false;this.releasedFor=1;this.move.set(0,0,0);this.plopStrength=0;this.plopTime=0;this.clearSoften(); }
+  private clearSoften(){this.softenStrength=0;this.softenTime=-1;this.body.shearScale=1;}
   /** 0 when fully recovered, up to plopStrength during the flattened beat. */
   private plopEnvelope() {
     if(this.plopStrength<=0)return 0;
@@ -65,6 +92,17 @@ export class Locomotion {
   step(h:number) {
     const b=this.body, x=b.x, v=b.velocity;
     this.elapsed+=h; this.jumpCooldown-=h; this.plopTime+=h;
+    // Applied before body.step() consumes it, and always released back to
+    // exactly 1 so no later step sees a softened element.
+    if(this.softenTime>=0) {
+      this.softenTime+=h;
+      if(this.softenTime>=IMPACT_SOFTEN.window)this.clearSoften();
+      else {
+        const u=this.softenTime/IMPACT_SOFTEN.window;
+        const amount=this.softenStrength*(1-u*u*(3-2*u));
+        b.shearScale=1-amount*(1-IMPACT_SOFTEN.shear);
+      }
+    }
     if(this.plopStrength>0&&this.plopTime>PLOP.hold+PLOP.release){this.plopStrength=0;this.plopTime=0;}
     this.center.set(0,0,0); this.velocity.set(0,0,0);
     for(let i=0;i<b.mass.length;i++) {
@@ -76,7 +114,7 @@ export class Locomotion {
     b.canSleep=!this.jumpQueued;
     if(!b.canSleep)b.wake();
     if(b.sleeping)return;
-    if(b.grab) { this.releasedFor=0; this.jumpQueued=false; this.plopStrength=0; this.plopTime=0; return; }
+    if(b.grab) { this.releasedFor=0; this.jumpQueued=false; this.plopStrength=0; this.plopTime=0; this.clearSoften(); return; }
     this.releasedFor+=h;
     const recovery=Math.min(1,this.releasedFor/.65)*(this.grounded?1:.15);
     // Memory is what un-squashes him, so only it is suppressed; scaling damping
@@ -110,6 +148,7 @@ export class Locomotion {
       // progress, but a softer one never cuts the current beat short.
       const strength=Math.min(1,(speed-PLOP.speed)/PLOP.range);
       if(strength>0&&strength>this.plopEnvelope()){this.plopStrength=strength;this.plopTime=0;}
+      if(strength>0){this.softenStrength=strength;this.softenTime=0;}
     }
   }
 }

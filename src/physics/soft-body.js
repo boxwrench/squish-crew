@@ -33,6 +33,10 @@ export class SoftBody {
     // Shadows only the friction PHYS reads for the kernel, so every other
     // constant stays live and no object is allocated per step.
     this.grabSliding=false;this.stepPhys=Object.create(PHYS);
+    // Transient multiplier on the elastic shear response, driven by Locomotion
+    // for the impact frame of a hard landing. Exactly 1 at every other time, so
+    // idle, grabbed and airborne behaviour is bit-identical to PHYS.shear.
+    this.shearScale=1;
     const uniqueEdges=new Set();
     for(let t=0;t<cage.tets.length;t++) {
       const ids=cage.tets[t],offsets=ids.map(v=>v*3),[a,b,c,d]=offsets,p=this.rest;
@@ -81,7 +85,8 @@ export class SoftBody {
     const c0=ee*ii-ff*hh,c1=ff*gg-d*ii,c2=d*hh-ee*gg;
     const c3=c*hh-b*ii,c4=a*ii-c*gg,c5=b*gg-a*hh;
     const c6=b*ff-c*ee,c7=c*d-a*ff,c8=a*ee-b*d,J=a*c0+b*c1+c*c2;
-    const alphaD=1/(PHYS.shear*e.volume*h*h),alphaH=1/(PHYS.bulk*e.volume*h*h);
+    const shear=PHYS.shear*this.shearScale;
+    const alphaD=1/(shear*e.volume*h*h),alphaH=1/(PHYS.bulk*e.volume*h*h);
     let dd=alphaD,hhMass=alphaH,dh=0;
     for(let v=0;v<4;v++) {
       const j=v*3,x=g[j],y=g[j+1],z=g[j+2],w=this.inverseMass[e.ids[v]];
@@ -92,7 +97,7 @@ export class SoftBody {
     // Same energy as the reference:
     // W=mu/2*(||F||²-3)+K/2*(J-1-mu/K)².
     // Solve its two constraints together. At F=I their forces cancel exactly.
-    const rd=-norm-alphaD*e.lambdaD,rh=-(J-1-PHYS.shear/PHYS.bulk)-alphaH*e.lambdaH;
+    const rd=-norm-alphaD*e.lambdaD,rh=-(J-1-shear/PHYS.bulk)-alphaH*e.lambdaH;
     const denominator=dd*hhMass-dh*dh;
     const dlD=(rd*hhMass-rh*dh)/denominator,dlH=(rh*dd-rd*dh)/denominator;
     e.lambdaD+=dlD;e.lambdaH+=dlH;
@@ -252,6 +257,7 @@ export class SoftBody {
     const scale=this.frictionScale;
     this.stepPhys.staticFriction=PHYS.staticFriction*scale;
     this.stepPhys.dynamicFriction=PHYS.dynamicFriction*scale;
+    this.stepPhys.shear=PHYS.shear*this.shearScale;
     this.kernel.step(h,this.stepPhys);
     const meta=this.kernel.meta;this.grounded=meta[0]!==0;this.lastMinJacobian=meta[1];this.limitedSteps+=meta[2];this.stepFraction=meta[14];
     this.guardedSteps+=meta[15];
@@ -353,7 +359,7 @@ export class SoftBody {
     let volume=0;for(const e of this.elements)volume+=matrixDet(this.deformation(e))*e.volume;return volume/this.cage.totalVolume;
   }
   wake(){this.sleeping=false;this.quietTime=0;}
-  reset(){this.x.set(this.rest);this.previous.set(this.rest);this.orientationSafety?.capture();this.velocity.fill(0);this.grab=null;this.grounded=false;this.stepFraction=1;if(this.kernel)this.kernel.meta[14]=1;this.wake();this.updateSurface();}
+  reset(){this.shearScale=1;this.x.set(this.rest);this.previous.set(this.rest);this.orientationSafety?.capture();this.velocity.fill(0);this.grab=null;this.grounded=false;this.stepFraction=1;if(this.kernel)this.kernel.meta[14]=1;this.wake();this.updateSurface();}
   nudge(){this.wake();for(let i=0;i<this.mass.length;i++){const j=i*3;this.velocity[j]+=.095+(this.x[j+1]-this.center.y)*3;this.velocity[j+1]+=.12;this.velocity[j+2]+=.025;}}
   isFinite(){for(let i=0;i<this.x.length;i++)if(!Number.isFinite(this.x[i])||!Number.isFinite(this.velocity[i])||Math.abs(this.x[i])>100000)return false;return true;}
 }
