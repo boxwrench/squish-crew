@@ -1,5 +1,6 @@
 import type { PerspectiveCamera } from 'three/webgpu';
 import { FacilityAudio, type FacilitySoundEvent } from './facility-sound.ts';
+import { squealVoice } from './reactions.ts';
 
 type AudioWindow=Window&{webkitAudioContext?:typeof AudioContext};
 type ToneShape=OscillatorType;
@@ -166,22 +167,27 @@ export class JellySound {
     const t=ctx.currentTime;
     if(!this.stretchOscillator) {
       const osc=ctx.createOscillator(),gain=ctx.createGain(),filter=ctx.createBiquadFilter();
-      osc.type='sine';filter.type='bandpass';filter.Q.value=5;filter.frequency.value=740;
+      osc.type='sine';filter.type='bandpass';filter.Q.value=6;filter.frequency.value=700;
       gain.gain.value=.0001;osc.connect(filter).connect(gain).connect(output);osc.start();
       osc.onended=()=>{osc.disconnect();gain.disconnect();filter.disconnect();if(this.stretchOscillator===osc)this.stretchOscillator=null;};
       this.stretchOscillator=osc;this.stretchGain=gain;this.stretchFilter=filter;
     }
     const osc=this.stretchOscillator,gain=this.stretchGain,filter=this.stretchFilter;
     if(!osc||!gain||!filter)return;
-    osc.frequency.setTargetAtTime(300+value*820,t,.025);
-    filter.frequency.setTargetAtTime(650+value*700,t,.03);
-    gain.gain.setTargetAtTime(.012+value*.045,t,.025);
+    // One voice for the whole grab: only its parameters move, so a light drag
+    // stays silent and only an extreme pull becomes a comic squeal.
+    const voice=squealVoice(value);
+    osc.frequency.setTargetAtTime(voice.frequency,t,.025);
+    filter.frequency.setTargetAtTime(voice.filter,t,.03);
+    gain.gain.setTargetAtTime(Math.max(.0001,voice.gain),t,.025);
   }
 
   stopStretch() {
     const ctx=this.context,osc=this.stretchOscillator,gain=this.stretchGain;
     if(!ctx||!osc||!gain)return;
     const t=ctx.currentTime;gain.gain.cancelScheduledValues(t);gain.gain.setTargetAtTime(.0001,t,.035);
+    // Letting go drops the squeal's pitch as it fades, instead of cutting it.
+    osc.frequency.cancelScheduledValues(t);osc.frequency.setTargetAtTime(240,t,.05);
     osc.stop(t+.16);this.stretchOscillator=null;this.stretchGain=null;this.stretchFilter=null;
   }
 
@@ -207,6 +213,36 @@ export class JellySound {
       osc.onended=()=>{osc.disconnect();gain.disconnect();};
     }
     this.noise(t,.065,.12*strength,foot?900:570,1.4,out);
+  }
+
+  /**
+   * A short vocal "oof" for a hard landing: a low formant-shaped voice sliding
+   * downward with a breath of noise. Layered over contact(), never replacing it.
+   */
+  grunt(strength:number) {
+    const ctx=this.context,out=this.sfxGain;
+    if(!ctx||!out||ctx.state!=='running'||this.muted)return;
+    const t=ctx.currentTime,amount=Math.max(0,Math.min(1,strength));
+    const osc=ctx.createOscillator(),formant=ctx.createBiquadFilter(),gain=ctx.createGain();
+    const base=128+Math.random()*20;
+    osc.type='sawtooth';
+    osc.frequency.setValueAtTime(base,t);osc.frequency.exponentialRampToValueAtTime(base*.55,t+.13);
+    formant.type='bandpass';formant.Q.value=3.2;
+    formant.frequency.setValueAtTime(760,t);formant.frequency.exponentialRampToValueAtTime(400,t+.13);
+    gain.gain.setValueAtTime(.0001,t);
+    gain.gain.exponentialRampToValueAtTime(.045+.085*amount,t+.022);
+    gain.gain.exponentialRampToValueAtTime(.0001,t+.17);
+    osc.connect(formant).connect(gain).connect(out);osc.start(t);osc.stop(t+.2);
+    osc.onended=()=>{osc.disconnect();formant.disconnect();gain.disconnect();};
+    this.noise(t+.006,.05,.018+.026*amount,880,.9,out);
+  }
+
+  /** One tiny "pfft/plink" per sweat burst, never per droplet. */
+  sweat(strength:number) {
+    const ctx=this.context;if(!ctx||this.muted)return;
+    const t=ctx.currentTime,amount=Math.max(0,Math.min(1,strength));
+    this.noise(t,.045,.018+.022*amount,2600,1.7);
+    this.tone(t+.012,1250,1850,.038,.014+.012*amount,'sine');
   }
 
   splash(strength:number) {

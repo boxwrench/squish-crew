@@ -27,6 +27,11 @@ type PointerGrab={
 export class Input {
   /** Facilities temporarily own the body while orbit controls remain available. */
   bodyControlled:()=>boolean=()=>false;
+  /**
+   * Normalized grip stretch, reported to the runtime so it can drive character
+   * reactions. Input stays unaware of how any reaction is produced.
+   */
+  onStretch:(amount:number)=>void=()=>{};
   facilityCameraDistance:()=>number|undefined=()=>undefined;
   readonly controls:OrbitControls;
   private touchKeys=new Map<number,string>();
@@ -97,7 +102,8 @@ export class Input {
     this.eventRay(sample);
     if(projectGrabTarget(this.raycaster.ray,state.plane,this.temp)) {
       state.rawTarget.copy(this.temp);state.commandVersion++;
-      this.sound.stretch(Math.min(1,state.rawTarget.distanceTo(state.grab.point)/.08));
+      const stretch=Math.min(1,state.rawTarget.distanceTo(state.grab.point)/.08);
+      this.sound.stretch(stretch);this.onStretch(stretch);
       return true;
     }
     return false;
@@ -157,7 +163,7 @@ export class Input {
     state.releasePending=true;
     state.tap=e.type==='pointerup'&&!state.moved&&performance.now()-state.downTime<280&&this.grabs.size===1;
     if(e.type==='pointerup')this.sound.release(Math.min(1,state.rawTarget.distanceTo(state.grab.point)/.08));
-    this.sound.stopStretch();
+    this.sound.stopStretch();this.onStretch(0);
     state.releaseStepsRemaining=state.physicsSteps===0?2:1;
     if(this.canvas.hasPointerCapture(e.pointerId))this.canvas.releasePointerCapture(e.pointerId);
     this.syncGrabControls();
@@ -193,7 +199,7 @@ export class Input {
   };
   clear=()=>{
     this.touchKeys.clear();
-    this.sound.stopStretch();
+    this.sound.stopStretch();this.onStretch(0);
     this.finishRelease();this.rig.move.set(0,0,0);
     document.querySelectorAll('.held').forEach(el=>el.classList.remove('held'));
   };

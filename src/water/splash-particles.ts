@@ -2,19 +2,23 @@ import * as THREE from 'three/webgpu';
 import { PHYS } from '../physics/constants.js';
 
 const MAX_DROPS = 32;
+/** Sweat is a cartoon beat, not a spill: drops vanish long before they pool. */
+const DROP_LIFE = .45;
 
 type SplashDrop = {
   active: boolean;
   position: THREE.Vector3;
   velocity: THREE.Vector3;
   radius: number;
+  life: number;
 };
 
 /**
- * Droplets thrown off by a hard landing, and later by a burst.
+ * Cartoon sweat drops flicked off the mascot by a hard landing or an extreme pull.
  *
  * One InstancedMesh and simple ballistics: no collision beyond the floor, no
- * soft bodies, no allocation per frame. Drops retire on contact with the floor; the landing circle carries the effect.
+ * fluid, no allocation per frame. Drops retire on a short timer or on reaching
+ * the floor, so nothing is ever left lying wet.
  */
 export class SplashParticles {
   readonly mesh: THREE.InstancedMesh;
@@ -34,7 +38,7 @@ export class SplashParticles {
     this.mesh.castShadow = false;
     this.mesh.count = MAX_DROPS;
     for (let i = 0; i < MAX_DROPS; i++) {
-      this.drops.push({ active: false, position: new THREE.Vector3(), velocity: new THREE.Vector3(), radius: .002 });
+      this.drops.push({ active: false, position: new THREE.Vector3(), velocity: new THREE.Vector3(), radius: .002, life: 0 });
     }
     this.hide();
   }
@@ -42,9 +46,12 @@ export class SplashParticles {
   /** True while any drop is in the air, so the render loop keeps running. */
   get active() { return this.drops.some(drop => drop.active); }
 
+  /** How many drops are currently airborne. */
+  get airborne() { return this.drops.reduce((total, drop) => total + (drop.active ? 1 : 0), 0); }
+
   /**
-   * Throw `count` drops outward from a landing or a burst. `speed` sets how far
-   * they fly; `carry` is the body's own motion, so a sideways landing sprays
+   * Flick `count` sweat drops outward from the mascot. `speed` sets how far they
+   * fly; `carry` is the body's own motion, so a sideways landing sprays
    * downrange instead of straight up.
    */
   burst(origin: THREE.Vector3, speed: number, count: number, carry?: THREE.Vector3) {
@@ -55,10 +62,13 @@ export class SplashParticles {
       const angle = Math.random() * Math.PI * 2;
       const out = speed * (.35 + Math.random() * .55);
       const up = speed * (.55 + Math.random() * .75);
-      drop.position.set(origin.x + Math.cos(angle) * .012, PHYS.floor + .004 + Math.random() * .01, origin.z + Math.sin(angle) * .012);
+      // Sweat leaves the body itself rather than the floor it hit.
+      drop.position.set(origin.x + Math.cos(angle) * .016, Math.max(PHYS.floor + .006, origin.y + .012), origin.z + Math.sin(angle) * .016);
       drop.velocity.set(Math.cos(angle) * out, up, Math.sin(angle) * out);
       if (carry) drop.velocity.addScaledVector(carry, .35);
-      drop.radius = .0013 + Math.random() * .0022;
+      // A touch larger than a real droplet, for a readable cartoon bead.
+      drop.radius = .0022 + Math.random() * .0026;
+      drop.life = DROP_LIFE * (.75 + Math.random() * .5);
       drop.active = true;
       spawned++;
     }
@@ -69,7 +79,8 @@ export class SplashParticles {
       if (!drop.active) continue;
       drop.velocity.y -= PHYS.gravity * dt;
       drop.position.addScaledVector(drop.velocity, dt);
-      if (drop.position.y <= PHYS.floor + drop.radius) {
+      drop.life -= dt;
+      if (drop.life <= 0 || drop.position.y <= PHYS.floor + drop.radius) {
         drop.active = false;
       }
     }

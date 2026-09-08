@@ -15,6 +15,7 @@ import { createComposite } from '../graphics/composite.ts';
 import { FixedStepper } from './fixed-step.ts';
 import { FacilityShadows } from '../graphics/facility-shadows.ts';
 import { SplashParticles } from '../water/splash-particles.ts';
+import { ReactionGate, REACTION, hardImpact } from './reactions.ts';
 import { Puddle } from '../water/puddle.ts';
 import { quality, observeFrame } from '../graphics/quality.ts';
 import type { LegSnapshot } from '../graphics/mascot-legs.ts';
@@ -32,7 +33,7 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
   camera.position.set(.015,.115,.175);
   stage('Reading the light');
   const environment=await loadEnvironment(renderer,scene);
-  stage('Preparing the placeholder');
+  stage('Preparing the mascot');
   const body=new SoftBody(await loadBabyCage());
   const baby=new Baby(body);scene.add(baby.group);
   const optics=new RefractiveLightField(body.cage.opticalSurface,environment.incoming,ABSORPTION);
@@ -42,20 +43,26 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
   const table=await makeTable(optics,environment,facilityShadows,puddle);scene.add(table.mesh);
   const composite=createComposite(renderer,scene,camera);
   const rig=new Locomotion(body);
-  let splashCooldown=0;
+  const reactions=new ReactionGate();
+  // Cartoon sweat, not water: a couple of drops flicked off by the effort.
+  const sweatBurst=(count:number,speed:number,strength:number)=>{
+    splash.burst(body.center,speed,count,rig.velocity);
+    sound.sweat(strength);
+  };
   rig.onContact=(speed,foot)=>{
     baby.legs.impact(speed);
     sound.contact(speed,foot);
-    if(speed>.35&&splashCooldown<=0) {
-      splashCooldown=.25;
-      splash.burst(body.center,Math.min(speed,.9)*.55,7+Math.round(Math.min(1,(speed-.35)/.45)*3),rig.velocity);
-      sound.splash(Math.min(1,(speed-.35)/.45));
-    }
+    const hardness=hardImpact(speed);
+    if(reactions.grunt(speed))sound.grunt(hardness);
+    const drops=reactions.impactSweat(speed);
+    if(drops)sweatBurst(drops,Math.min(speed,.9)*.5,hardness);
   };
   const physicsClock=new FixedStepper(PHYS.step);
   let lastTime=0,disposed=false,inspectionPaused=false;
-  const reset=()=>{inspectionPaused=false;sound.stopFacilities();sound.reset();input.clear();rig.reset();body.reset();input.recenter();baby.resetFace();physicsClock.reset();splashCooldown=0;splash.clear();puddle.hide();};
+  const reset=()=>{inspectionPaused=false;sound.stopFacilities();sound.reset();input.clear();rig.reset();body.reset();input.recenter();baby.resetFace();physicsClock.reset();reactions.reset();splash.clear();puddle.hide();};
   const input=new Input(camera,renderer.domElement,body,baby.mesh,rig,sound,reset);
+  // A grip pulled to its limit breaks a single small sweat burst, then re-arms.
+  input.onStretch=amount=>{if(reactions.stretchSweat(amount))sweatBurst(REACTION.stretchDrops,.34,.55);};
   if(import.meta.env.DEV)Object.defineProperty(window,'dropletDebug',{configurable:true,get:()=>({
     center:body.center.toArray(),sleeping:body.sleeping,grabs:body.grabs.length,volume:body.volumeRatio(),
     camera:camera.position.toArray(),finite:body.isFinite(),quality:{...quality},
@@ -78,6 +85,7 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
     puddleState:{visible:puddle.visible,radius:puddle.radius.value,strength:puddle.strength.value},
     hidePuddle:()=>puddle.hide(),
     splash:(count?:number,speed?:number)=>splash.burst(body.center,speed??.55,count??24,rig.velocity),
+    sweatDrops:splash.airborne,
     soundHop:()=>sound.hop(),soundSplash:()=>sound.splash(.8),
     musicOn:()=>sound.musicOn(),musicOff:()=>sound.musicOff(),
   })});
@@ -133,7 +141,7 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
       if(!inspectionPaused)baby.update(dt);
       if(observeFrame(dt))resize();
       transport.rate=quality.opticalHz;
-      splashCooldown=Math.max(0,splashCooldown-dt);
+      reactions.advance(dt);
       splash.update(dt);
       const puddleChanged=puddle.update(effectDt);
       input.update(dt);
