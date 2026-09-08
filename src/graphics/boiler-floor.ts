@@ -13,10 +13,13 @@ export function makeBoilerFloor(optics:RefractiveLightField,light:{windowFractio
   const slab=positionWorld.xz.add(.075).div(.15);
   const edge=slab.fract().sub(.5).abs();
   const seam=edge.x.max(edge.y).smoothstep(.494,.499);
-  const material=new THREE.MeshStandardNodeMaterial({roughness:.88,metalness:0});
-  const concrete=new THREE.Color('#85877c');
+  const material=new THREE.MeshStandardNodeMaterial({roughness:.94,metalness:0});
+  const concrete=new THREE.Color('#898b80');
+  // Broad, almost imperceptible paint variation: no image maps or fine noise.
+  const variation=positionWorld.x.mul(19).sin().mul(positionWorld.z.mul(23).sin()).mul(.018).add(1);
   material.colorNode=vec3(concrete.r,concrete.g,concrete.b)
-    .mul(float(1).sub(seam.mul(.16)))
+    .mul(variation)
+    .mul(float(1).sub(seam.mul(.11)))
     .mul(float(1).sub(shadow.mul(light.windowFraction)))
     .mul(float(1).sub(contact.mul(.4)));
   const mesh=new THREE.Mesh(new THREE.PlaneGeometry(200,200),material);

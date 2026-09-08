@@ -33,6 +33,7 @@ export class MascotLegs {
   private readonly previousVelocity=new THREE.Vector3();
   private readonly acceleration=new THREE.Vector3();
   private initialized=false;
+  private squirmTime=-1;
   constructor(body:SoftBody,group:THREE.Group) {
     this.body=body;
     const rest=new Float32Array(body.surface.positions.length);
@@ -92,12 +93,15 @@ export class MascotLegs {
   private pose() {
     for(let i=0;i<2;i++) {
       this.pivots[i].position.copy(this.anchors[i].point);
-      this.euler.set(this.angle[i],0,(i===0?-1:1)*(.12+this.splay[i]));
+      const t=this.squirmTime;
+      const kick=t<0?0:-.18+.32*Math.sin(t*5.4+i*2.4)+.09*Math.sin(t*8.2+i);
+      const spread=t<0?0:.12+.10*Math.sin(t*4.1+i*1.9);
+      this.euler.set(THREE.MathUtils.clamp(this.angle[i]+kick,-LEG_TUNING.limit,LEG_TUNING.limit),0,(i===0?-1:1)*(.12+THREE.MathUtils.clamp(this.splay[i]+spread,-.38,.9)));
       this.swing.setFromEuler(this.euler);this.pivots[i].quaternion.copy(this.frame).multiply(this.swing);
     }
     this.revision++;
   }
-  get active(){return this.moving;}
+  get active(){return this.moving||this.squirmTime>=0;}
   impact(speed:number) {
     if(this.impactCooldown>0)return;
     const kick=Math.min(7.5,Math.max(0,speed-.12)*LEG_TUNING.impact);
@@ -106,7 +110,8 @@ export class MascotLegs {
     for(let i=0;i<2;i++){this.velocity[i]-=kick*.55;this.splayVelocity[i]+=kick;}
     this.moving=true;
   }
-  update(dt:number) {
+  update(dt:number,squirmTime=-1) {
+    const squirmChanged=this.squirmTime>=0||squirmTime>=0;this.squirmTime=squirmTime;
     this.impactCooldown=Math.max(0,this.impactCooldown-dt);
     this.sample();
     if(!this.initialized||dt<=0) {
@@ -134,7 +139,7 @@ export class MascotLegs {
       if(this.splay[i]<-.38){this.splay[i]=-.38;this.splayVelocity[i]*=-.15;}
     }
     for(let i=0;i<2;i++)energy+=Math.abs(this.angle[i])+Math.abs(this.splay[i])+Math.abs(this.velocity[i])+Math.abs(this.splayVelocity[i]);
-    const changed=this.moving||!this.body.sleeping||energy>.001;
+    const changed=squirmChanged||this.moving||!this.body.sleeping||energy>.001;
     this.moving=energy>.001;
     if(this.body.sleeping&&!this.moving){this.angle.fill(0);this.splay.fill(0);this.velocity.fill(0);this.splayVelocity.fill(0);}
     if(changed)this.pose();

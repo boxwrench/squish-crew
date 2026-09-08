@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { float, positionWorld, vec3 } from 'three/tsl';
 
 /** Decorative workshop scenery only: no contacts, updates, or extra solver. */
 export async function makeBoilerRoom(scene:THREE.Scene) {
@@ -8,9 +9,14 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
   room.scale.set(.5,.5,.6);room.position.z=.035;
   const materials:THREE.Material[]=[],geometries:THREE.BufferGeometry[]=[];
   const material=(color:string,roughness=.8,metalness=0)=>{
-    const m=new THREE.MeshStandardNodeMaterial({color,roughness,metalness});materials.push(m);return m;
+    const m=new THREE.MeshStandardNodeMaterial({color,roughness,metalness});
+    // Broad finish variation, not grime or a high-frequency noise texture.
+    const finish=positionWorld.x.mul(45).sin().mul(positionWorld.y.add(positionWorld.z).mul(59).sin());
+    m.roughnessNode=float(roughness).add(finish.mul(.025)).clamp(.1,1);
+    m.colorNode=vec3(m.color.r,m.color.g,m.color.b).mul(finish.mul(.012).add(1));
+    materials.push(m);return m;
   };
-  const wall=material('#a89d87'),trim=material('#777363'),steel=material('#3e5558',.64,.25);
+  const wall=material('#aaa18e'),lowerWall=material('#969584'),trim=material('#77796c'),steel=material('#3e5558',.64,.25);
   const dark=material('#263638',.65,.3),copper=material('#a46e47',.62,.35);
   const red=material('#9d3e2e'),cream=material('#e6ddc3'),black=material('#35413d');
   const glow=material('#bb621d');glow.emissive.set('#ef7314');glow.emissiveIntensity=.5;
@@ -48,11 +54,25 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
     disc(.0012,.0007,black,x,y,z+.0045);
   };
 
-  box(.9,.27,.012,wall,0,.135,-.196,.001);
+  // Taller back and quiet return walls keep orbit/wide views inside the shop.
+  // All scenery stays well outside the central play area.
+  box(.9,.48,.012,wall,0,.24,-.196,.001);
+  box(.9,.065,.003,lowerWall,0,.034,-.188,.001);
   box(.9,.018,.017,trim,0,.009,-.186,.001);
+  for(const sign of [-1,1]) {
+    box(.012,.48,.59,wall,sign*.455,.24,.095,.001);
+    box(.003,.065,.59,lowerWall,sign*.447,.034,.095,.001);
+    box(.016,.018,.59,trim,sign*.44,.009,.095,.001);
+    // Small conduit/junction silhouettes continue the room without competing
+    // with the boiler, mascot, or the single union sign.
+    pipe([[sign*.35,.014,-.181],[sign*.35,.204,-.181],[sign*.374,.222,-.181],[sign*.44,.222,-.172],[sign*.443,.222,.16]],.0026,trim);
+    box(.021,.029,.011,steel,sign*.35,.114,-.179,.002);
+    box(.013,.020,.002,trim,sign*.35,.114,-.1725,.001);
+  }
   // Quiet wall seams keep the machinery readable without a busy brick pattern.
-  for(const x of [-.23,-.035,.20])box(.002,.245,.002,trim,x,.138,-.188,.0004);
-  box(.9,.005,.006,trim,0,.231,-.185,.001);
+  for(const x of [-.23,-.035,.20])box(.001,.44,.002,lowerWall,x,.25,-.188,.0004);
+  box(.9,.004,.004,trim,0,.231,-.185,.001);
+  box(.9,.003,.004,trim,0,.067,-.184,.001);
 
   // Rounded, squat boiler with a warm, contained furnace window.
   const boilerStart=room.children.length;
@@ -69,15 +89,15 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
   // Broad bent runs and simple flange collars suggest a real plant room.
   pipe([[-.083,.126,-.115],[-.083,.157,-.115],[-.127,.173,-.148],[-.23,.173,-.163]],.010,dark);
   pipe([[-.24,.012,-.162],[-.24,.145,-.162],[-.219,.163,-.162],[.19,.163,-.162],[.213,.142,-.162],[.213,.018,-.162]],.0065,copper);
-  pipe([[.166,.012,-.17],[.166,.077,-.17],[.145,.094,-.17],[.043,.094,-.17],[.022,.071,-.15],[.022,.023,-.15]],.005,steel);
+  pipe([[.166,.012,-.17],[.166,.060,-.17],[.145,.077,-.17],[.043,.077,-.17],[.022,.054,-.15],[.022,.023,-.15]],.005,steel);
   for(const x of [-.19,-.028,.11]) {
     const flange=cylinder(.009,.006,dark,x,.163,-.162);flange.rotation.z=Math.PI/2;
     box(.007,.022,.017,trim,x,.163,-.18,.001);
   }
   for(const y of [.04,.113])cylinder(.009,.005,dark,.213,y,-.162);
-  wheel(-.185,.163,-.149,.010);wheel(.213,.102,-.147,.012);wheel(.070,.094,-.157,.009);
-  gauge(.025,.143,-.15,.007);
-  pipe([[.025,.137,-.155],[.025,.119,-.155],[.025,.111,-.165]],.0018,copper);
+  wheel(-.185,.163,-.149,.010);wheel(.213,.102,-.147,.012);wheel(.070,.077,-.157,.009);
+  gauge(.192,.133,-.15,.007);
+  pipe([[.192,.127,-.155],[.192,.117,-.155],[.208,.111,-.165]],.0018,copper);
 
   // The supplied logo is used once, unchanged, on one cream enamel wall sign.
   const signStart=room.children.length;
@@ -86,14 +106,17 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
   const texture=await new THREE.TextureLoader().loadAsync(new URL('../../art/main-nav-logo-2025-04-17-193A053A06.webp',import.meta.url).href);
   texture.colorSpace=THREE.SRGBColorSpace;
   const logoMaterial=new THREE.MeshBasicNodeMaterial({map:texture,transparent:true,depthWrite:false});materials.push(logoMaterial);
-  mesh(new THREE.PlaneGeometry(.119,.0353),logoMaterial,.101,.125,-.1723);
+  mesh(new THREE.PlaneGeometry(.119,.0353),logoMaterial,.101,.125,-.1718);
   for(const x of [.04,.162])for(const y of [.110,.140])disc(.0012,.0006,dark,x,y,-.172);
-  // 1.2 rather than the original .8, so the sign reads from the play camera.
-  // The anchor is unchanged, so it grows about its own centre on the same wall.
+  // Larger and left of the original position to keep the complete "39" in
+  // the default camera. Scale depth positions too: otherwise the enlarged
+  // enamel face intersects the logo plane and causes shimmering lettering.
+  const signScale=1.25;
   for(const part of room.children.slice(signStart)) {
-    part.position.x=.078+(part.position.x-.101)*1.2;
-    part.position.y=.109+(part.position.y-.125)*1.2;
-    part.scale.multiplyScalar(1.2);
+    part.position.x=.040+(part.position.x-.101)*signScale;
+    part.position.y=.130+(part.position.y-.125)*signScale;
+    part.position.z=-.177+(part.position.z+.177)*signScale;
+    part.scale.multiplyScalar(signScale);
   }
 
   return {dispose(){scene.remove(room);for(const g of geometries)g.dispose();for(const m of materials)m.dispose();texture.dispose();}};

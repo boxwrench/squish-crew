@@ -56,7 +56,7 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
     if(drops)sweatBurst(drops,Math.min(speed,.9)*.5,hardness);
   };
   const physicsClock=new FixedStepper(PHYS.step);
-  let lastTime=0,disposed=false,inspectionPaused=false;
+  let lastTime=0,disposed=false,inspectionPaused=false,inspectionAccessories=false;
   const reset=()=>{inspectionPaused=false;sound.stopFacilities();sound.reset();input.clear();rig.reset();body.reset();input.recenter();baby.resetFace();physicsClock.reset();reactions.reset();splash.clear();};
   const input=new Input(camera,renderer.domElement,body,baby.mesh,rig,sound,reset);
   // A grip pulled to its limit breaks a single small sweat burst, then re-arms.
@@ -64,18 +64,18 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
   if(import.meta.env.DEV)Object.defineProperty(window,'dropletDebug',{configurable:true,get:()=>({
     center:body.center.toArray(),sleeping:body.sleeping,grabs:body.grabs.length,volume:body.volumeRatio(),
     camera:camera.position.toArray(),finite:body.isFinite(),quality:{...quality},
-    legs:baby.legs.debug,
-    inspectLegPose:(pose:{positions:number[];legState:LegSnapshot;armState?:ReturnType<typeof baby.arms.snapshot>;view?:[number,number,number]})=>{
+    legs:baby.legs.debug,squirmTime:baby.squirm.time,
+    inspectLegPose:(pose:{positions:number[];legState:LegSnapshot;armState?:ReturnType<typeof baby.arms.snapshot>;view?:[number,number,number];animateAccessories?:boolean})=>{
       const positions=pose.positions;
       if(positions.length!==body.x.length||positions.some(v=>!Number.isFinite(v)))throw new Error('Invalid inspection pose');
-      reset();inspectionPaused=true;body.x.set(positions);body.previous.set(positions);body.velocity.fill(0);body.updateSurface();
+      reset();inspectionPaused=true;inspectionAccessories=!!pose.animateAccessories;body.x.set(positions);body.previous.set(positions);body.velocity.fill(0);body.updateSurface();
       baby.resetFace();baby.legs.restoreInspection(pose.legState);if(pose.armState)baby.arms.restoreInspection(pose.armState);input.recenter();input.update(10);
       camera.position.copy(input.controls.target).add(new THREE.Vector3(...(pose.view??[.025,.11,.23] as const)));input.controls.update();
     },
     // Replay measured physics states for repeatable prototype screenshot review.
     inspectPose:(positions:number[])=>{
       if(positions.length!==body.x.length||positions.some(v=>!Number.isFinite(v)))throw new Error('Invalid inspection pose');
-      reset();inspectionPaused=true;body.x.set(positions);body.previous.set(positions);body.velocity.fill(0);body.updateSurface();baby.resetFace();input.recenter();input.update(10);
+      reset();inspectionPaused=true;inspectionAccessories=false;body.x.set(positions);body.previous.set(positions);body.velocity.fill(0);body.updateSurface();baby.resetFace();input.recenter();input.update(10);
       camera.position.copy(input.controls.target).add(new THREE.Vector3(.025,.13,.27));input.controls.update();
     },
     thickness:[Math.min(...body.surface.geometry.attributes.opticalThickness.array),Math.max(...body.surface.geometry.attributes.opticalThickness.array)],
@@ -131,7 +131,7 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
         if(!body.isFinite())throw new Error('The soft-body simulation produced an invalid state');
         body.updateSurface();
       }
-      if(!inspectionPaused)baby.update(dt);
+      if(!inspectionPaused||inspectionAccessories)baby.update(dt);
       if(observeFrame(dt))resize();
       transport.rate=quality.opticalHz;
       reactions.advance(dt);

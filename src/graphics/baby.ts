@@ -4,6 +4,7 @@ import { MascotLegs } from './mascot-legs.ts';
 import { MascotArms } from './mascot-arms.ts';
 import { MascotHead } from './mascot-head.ts';
 import { MascotClothes } from './mascot-clothes.ts';
+import { BackSquirm } from './back-squirm.ts';
 import { DEFAULT_JELLY_FLAVOR, JELLY_FLAVORS, type JellyFlavorName } from './jelly-flavors.ts';
 
 export const ABSORPTION=JELLY_FLAVORS[DEFAULT_JELLY_FLAVOR].absorption;
@@ -17,6 +18,7 @@ export class Baby {
   readonly arms:MascotArms;
   readonly head:MascotHead;
   readonly clothes:MascotClothes;
+  readonly squirm:BackSquirm;
   constructor(body:SoftBody) {
     this.body=body;
     const material=new THREE.MeshPhysicalNodeMaterial({
@@ -42,6 +44,7 @@ export class Baby {
     this.arms=new MascotArms(body,this.group);
     this.head=new MascotHead(body,this.group);
     this.clothes=new MascotClothes(body,this.group);
+    this.squirm=new BackSquirm(body);
     this.update();
   }
   setFlavor(flavor:JellyFlavorName) {
@@ -53,8 +56,8 @@ export class Baby {
     );
   }
   get accessoryRevision(){return this.legs.revision+this.arms.revision+this.head.revision+this.clothes.revision;}
-  update(dt=0) { this.legs.update(dt);this.arms.update(dt);this.head.update();this.clothes.update(); }
-  resetFace() { this.legs.reset();this.arms.reset();this.head.update();this.clothes.update(); }
+  update(dt=0) { this.squirm.update(dt);this.legs.update(dt,this.squirm.time);this.arms.update(dt,this.squirm.time);this.head.update();this.clothes.update(); }
+  resetFace() { this.squirm.reset();this.legs.reset();this.arms.reset();this.head.update();this.clothes.update(); }
   dispose() {
     this.group.traverse(object=>{
       if(object instanceof THREE.Mesh) {

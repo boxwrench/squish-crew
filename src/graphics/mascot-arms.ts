@@ -23,6 +23,7 @@ export class MascotArms {
   private readonly euler=new THREE.Euler();
   private moving=false;
   private initialized=false;
+  private squirmTime=-1;
   constructor(body:SoftBody,group:THREE.Group) {
     this.body=body;
     const shirt=new THREE.MeshStandardNodeMaterial({color:'#203d60',roughness:.86});
@@ -41,12 +42,15 @@ export class MascotArms {
   private pose() {
     for(let i=0;i<2;i++) {
       this.pivots[i].position.copy(this.anchors[i].point);
-      this.euler.set(this.angles[i],0,(i===0?-1:1)*.42);
+      const t=this.squirmTime;
+      const wiggle=t<0?0:.26*Math.sin(t*6.1+i*2.2)+.08*Math.sin(t*9.3+i);
+      this.euler.set(THREE.MathUtils.clamp(this.angles[i]+wiggle,-ARM_TUNING.limit,ARM_TUNING.limit),0,(i===0?-1:1)*(.42+(t<0?0:.10*Math.sin(t*4.7+i*1.8))));
       this.swing.setFromEuler(this.euler);this.pivots[i].quaternion.copy(this.anchors[i].quaternion).multiply(this.swing);
     }
     this.revision++;
   }
-  update(dt:number) {
+  update(dt:number,squirmTime=-1) {
+    const squirmChanged=this.squirmTime>=0||squirmTime>=0;this.squirmTime=squirmTime;
     for(const a of this.anchors)a.update();
     if(!this.initialized||dt<=0) {
       for(let i=0;i<2;i++){this.previousPoints[i].copy(this.anchors[i].point);this.previousFrames[i].copy(this.anchors[i].quaternion);this.previousVelocities[i].set(0,0,0);}
@@ -70,13 +74,13 @@ export class MascotArms {
       }
       energy+=Math.abs(this.angles[i])+Math.abs(this.velocities[i]);
     }
-    const changed=this.moving||!this.body.sleeping||energy>.001;
+    const changed=squirmChanged||this.moving||!this.body.sleeping||energy>.001;
     this.moving=energy>.001;
     if(this.body.sleeping&&!this.moving){this.angles.fill(0);this.velocities.fill(0);}
     if(changed)this.pose();return changed;
   }
   reset(){this.angles.fill(0);this.velocities.fill(0);this.moving=false;this.initialized=false;this.update(0);}
-  get active(){return this.moving;}
+  get active(){return this.moving||this.squirmTime>=0;}
   get debug(){return {active:this.moving,revision:this.revision,arms:this.anchors.map((a,i)=>({...a.debug,angle:this.angles[i],velocity:this.velocities[i]}))};}
   snapshot(){return this.debug;}
   restoreInspection(state:ReturnType<MascotArms['snapshot']>) {
