@@ -88,10 +88,12 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
   const logoMaterial=new THREE.MeshBasicNodeMaterial({map:texture,transparent:true,depthWrite:false});materials.push(logoMaterial);
   mesh(new THREE.PlaneGeometry(.119,.0353),logoMaterial,.101,.125,-.1723);
   for(const x of [.04,.162])for(const y of [.110,.140])disc(.0012,.0006,dark,x,y,-.172);
+  // 1.2 rather than the original .8, so the sign reads from the play camera.
+  // The anchor is unchanged, so it grows about its own centre on the same wall.
   for(const part of room.children.slice(signStart)) {
-    part.position.x=.078+(part.position.x-.101)*.8;
-    part.position.y=.109+(part.position.y-.125)*.8;
-    part.scale.multiplyScalar(.8);
+    part.position.x=.078+(part.position.x-.101)*1.2;
+    part.position.y=.109+(part.position.y-.125)*1.2;
+    part.scale.multiplyScalar(1.2);
   }
 
   return {dispose(){scene.remove(room);for(const g of geometries)g.dispose();for(const m of materials)m.dispose();texture.dispose();}};
