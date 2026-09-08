@@ -16,7 +16,7 @@ import { createComposite } from '../graphics/composite.ts';
 import { FixedStepper } from './fixed-step.ts';
 import { SplashParticles } from '../water/splash-particles.ts';
 import { FacilityCollision, type CollisionBox } from '../physics/facility-collision.ts';
-import { ReactionGate, REACTION, hardImpact } from './reactions.ts';
+import { ReactionGate, REACTION, hardImpact, gruntStrength } from './reactions.ts';
 import { quality, observeFrame } from '../graphics/quality.ts';
 import type { LegSnapshot } from '../graphics/mascot-legs.ts';
 
@@ -65,13 +65,17 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
     splash.burst(body.center,speed,count,rig.velocity);
     sound.sweat(strength);
   };
+  // Last landing and what it triggered, for the dev debug hook below.
+  let lastLanding={speed:0,grunt:0,drops:0};
   rig.onContact=(speed,foot)=>{
     baby.legs.impact(speed);
     sound.contact(speed,foot);
     const hardness=hardImpact(speed);
-    if(reactions.grunt(speed))sound.grunt(hardness);
+    const grunted=reactions.grunt(speed);
+    if(grunted)sound.grunt(gruntStrength(speed));
     const drops=reactions.impactSweat(speed);
     if(drops)sweatBurst(drops,Math.min(speed,.9)*.5,hardness);
+    lastLanding={speed,grunt:grunted?gruntStrength(speed):0,drops};
   };
   const physicsClock=new FixedStepper(PHYS.step);
   let lastTime=0,disposed=false,inspectionPaused=false,inspectionAccessories=false;
@@ -82,7 +86,7 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
   if(import.meta.env.DEV)Object.defineProperty(window,'dropletDebug',{configurable:true,get:()=>({
     center:body.center.toArray(),sleeping:body.sleeping,grabs:body.grabs.length,volume:body.volumeRatio(),
     camera:camera.position.toArray(),finite:body.isFinite(),quality:{...quality},
-    legs:baby.legs.debug,squirmTime:baby.squirm.time,
+    legs:baby.legs.debug,squirmTime:baby.squirm.time,lastLanding,
     walls:boilerRoom.collisionBoxes.map(w=>({center:[w.center.x,w.center.y,w.center.z],
       half:[w.halfSize.x,w.halfSize.y,w.halfSize.z],
       axes:[[w.xAxis.x,w.xAxis.y,w.xAxis.z],[w.yAxis.x,w.yAxis.y,w.yAxis.z],[w.zAxis.x,w.zAxis.y,w.zAxis.z]]})),

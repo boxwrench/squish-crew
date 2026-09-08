@@ -230,11 +230,11 @@ export class JellySound {
     formant.type='bandpass';formant.Q.value=3.2;
     formant.frequency.setValueAtTime(760,t);formant.frequency.exponentialRampToValueAtTime(400,t+.13);
     gain.gain.setValueAtTime(.0001,t);
-    gain.gain.exponentialRampToValueAtTime(.045+.085*amount,t+.022);
+    gain.gain.exponentialRampToValueAtTime(.062+.125*amount,t+.022);
     gain.gain.exponentialRampToValueAtTime(.0001,t+.17);
     osc.connect(formant).connect(gain).connect(out);osc.start(t);osc.stop(t+.2);
     osc.onended=()=>{osc.disconnect();formant.disconnect();gain.disconnect();};
-    this.noise(t+.006,.05,.018+.026*amount,880,.9,out);
+    this.noise(t+.006,.05,.024+.034*amount,880,.9,out);
   }
 
   /** One tiny "pfft/plink" per sweat burst, never per droplet. */

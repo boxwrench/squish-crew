@@ -11,12 +11,18 @@ export const REACTION = {
    * Contact speed (m/s) below which a landing is an ordinary bounce.
    *
    * This toy runs at PHYS.gravity 2.4 over a ~70mm body, so measured landings
-   * span roughly 0.12 m/s for a settle, 0.22 for an ordinary hop, and 0.33-0.41
-   * for a deliberate lift-and-drop. The threshold sits above every ordinary hop
-   * and inside the drop range, which is the intent behind the nominal
-   * 0.45-0.55 figure at earth-scale gravity.
+   * span roughly 0.12 m/s for a settle, 0.22 for an ordinary hop, 0.49 for an
+   * ordinary drop and 0.81 for the hardest a pointer can produce. This matches
+   * PLOP.speed, so anything that visibly plops is also heard, while every
+   * ordinary hop stays silent.
    */
-  gruntSpeed: .32,
+  gruntSpeed: .28,
+  /**
+   * Speed above the threshold for a fully saturated grunt. Deliberately wider
+   * than the plop's own saturation so an ordinary drop reads as a small oof and
+   * only a real pancake gets the full one.
+   */
+  gruntRange: .45,
   /** Seconds of silence enforced between grunts so bouncing cannot spam them. */
   gruntCooldown: .38,
   /** Contact speed (m/s) at or above which a landing may break a sweat. */
@@ -36,9 +42,14 @@ export const REACTION = {
   squealFloor: .30,
 } as const;
 
-/** 0-1 measure of how hard a landing was, above the reaction threshold. */
+/** 0-1 measure of how hard a landing was, above the sweat threshold. */
 export function hardImpact(speed: number) {
-  return Math.max(0, Math.min(1, (speed - REACTION.gruntSpeed) / REACTION.hardRange));
+  return Math.max(0, Math.min(1, (speed - REACTION.sweatSpeed) / REACTION.hardRange));
+}
+
+/** 0-1 grunt loudness: silent below the plop threshold, full at a pancake. */
+export function gruntStrength(speed: number) {
+  return Math.max(0, Math.min(1, (speed - REACTION.gruntSpeed) / REACTION.gruntRange));
 }
 
 /** 2-6 sweat drops, scaled by how hard the landing was. */

@@ -177,6 +177,105 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
   pipe([[-1.55,.50,-.94],[1.55,.50,-.94]],.0045,copper);
   pipe([[-1.55,.22,1.14],[-.30,.22,1.14],[-.26,.26,1.14],[1.55,.26,1.14]],.0038,trim);
 
+  // --- A third layer: headers, risers and the brackets that carry them -------
+  // Authored through the same cluster frame, so each piece is placed once in a
+  // local front-facing space and turned onto whichever wall it belongs to.
+  /** A pipe clamp and its wall pad, the detail that sells a run as mounted. */
+  const bracket=(x:number,y:number,radius:number)=>{
+    box(.010,.014,.008,trim,x,y,-.006,.001);
+    const clamp=cylinder(radius+.0022,.004,dark,x,y,.001);clamp.rotation.x=Math.PI/2;
+  };
+  /**
+   * A horizontal header with its carriers, and optional branch lines dropping
+   * off it. Heights and spacings vary per call so no two walls read alike.
+   */
+  const header=(y:number,fromX:number,toX:number,radius:number,mat:THREE.Material,
+    carriers:number[],branches:[number,number][]=[])=>{
+    pipe([[fromX,y,0],[toX,y,0]],radius,mat);
+    for(const x of carriers)bracket(x,y,radius);
+    for(const [x,drop] of branches) {
+      pipe([[x,y,0],[x,drop+.02,0],[x+.018,drop,0],[x+.055,drop,0]],radius*.55,mat);
+      bracket(x+.05,drop,radius*.55);
+    }
+  };
+  /** A vertical riser from the floor, elbowed into a short spur at the top. */
+  const riser=(x:number,top:number,radius:number,mat:THREE.Material,reach=.12)=>{
+    pipe([[x,.018,0],[x,top-.026,0],[x+.02*Math.sign(reach),top,0],[x+reach,top,0]],radius,mat);
+    bracket(x,.09,radius);bracket(x,top*.62,radius);
+  };
+
+  cluster(-1.34,back+.028,0,()=>{
+    riser(0,.42,.0055,steel,.15);
+    header(.30,-.10,.20,.0032,copper,[-.06,.12],[[.05,.17]]);
+    box(.040,.055,.012,trim,-.09,.17,.004,.002);
+    gauge(.155,.245,.011,.010);
+  });
+  cluster(-.18,back+.028,0,()=>{
+    header(.47,-.24,.30,.0042,dark,[-.16,.02,.20],[[-.08,.33],[.14,.36]]);
+    box(.052,.068,.013,steel,.06,.20,.005,.003);
+    box(.038,.050,.002,trim,.06,.20,.012,.002);
+    for(const dy of [-.012,.012])box(.020,.003,.002,dark,.06,.20+dy,.014,.0005);
+    wheel(-.16,.145,.014,.012);
+  });
+  cluster(1.38,back+.028,0,()=>{
+    riser(.02,.56,.0048,copper,-.16);
+    header(.24,-.20,.16,.0030,trim,[-.12,.08]);
+    gauge(-.19,.30,.011,.012);
+    box(.028,.038,.010,steel,.12,.155,.004,.002);
+  });
+
+  cluster(-1.26,front-.026,Math.PI,()=>{
+    riser(-.04,.38,.0050,copper,.14);
+    header(.20,-.16,.22,.0028,trim,[-.08,.14]);
+    box(.034,.046,.011,steel,.15,.145,.004,.002);
+  });
+  cluster(.02,front-.026,Math.PI,()=>{
+    header(.42,-.28,.26,.0046,steel,[-.20,-.02,.18],[[-.12,.28],[.10,.31]]);
+    wheel(.20,.155,.014,.015);
+    box(.046,.060,.012,trim,-.16,.16,.004,.003);
+    gauge(.02,.24,.010,.009);
+  });
+  cluster(1.30,front-.026,Math.PI,()=>{
+    riser(.05,.50,.0044,dark,-.14);
+    header(.27,-.18,.14,.0030,copper,[-.10,.06],[[-.02,.20]]);
+    box(.026,.036,.010,trim,-.16,.15,.004,.002);
+  });
+
+  cluster(-roomWidth/2+.027,-.05,Math.PI/2,()=>{
+    header(.36,-.30,.28,.0040,copper,[-.22,-.02,.20],[[-.14,.25],[.12,.22]]);
+    riser(.24,.55,.0050,steel,-.13);
+    box(.048,.062,.012,steel,-.10,.17,.005,.003);
+    gauge(.10,.16,.011,.010);
+  });
+  cluster(-roomWidth/2+.027,.92,Math.PI/2,()=>{
+    riser(-.06,.44,.0046,trim,.16);
+    header(.19,-.20,.18,.0026,copper,[-.12,.10]);
+    wheel(.14,.135,.013,.012);
+  });
+  cluster(roomWidth/2-.027,.10,-Math.PI/2,()=>{
+    header(.31,-.26,.30,.0044,steel,[-.18,.04,.24],[[-.10,.23],[.16,.20]]);
+    box(.054,.070,.013,trim,-.04,.185,.005,.003);
+    box(.040,.052,.002,dark,-.04,.185,.012,.002);
+    riser(.26,.48,.0042,copper,-.12);
+  });
+  cluster(roomWidth/2-.027,-.98,-Math.PI/2,()=>{
+    riser(0,.40,.0052,dark,.15);
+    header(.22,-.16,.20,.0030,trim,[-.08,.12],[[.04,.16]]);
+    gauge(-.14,.29,.011,.011);
+    box(.030,.040,.010,steel,.16,.15,.004,.002);
+  });
+
+  // Long headers at three different heights, each carried by its own brackets.
+  for(const [z,y,radius,mat,sign] of [
+    [back+.020,.66,.0034,trim,1],[front-.020,.58,.0030,copper,-1]] as const) {
+    pipe([[-1.5,y,z],[1.5,y,z]],radius,mat);
+    for(const x of [-1.15,-.45,.25,.95])box(.010,.013,.010,trim,x,y-.013*sign,z+.004*sign,.001);
+  }
+  pipe([[-1.594+.012,.78,-.92],[-1.594+.012,.78,1.10]],.0032,steel);
+  pipe([[1.594-.012,.71,-.92],[1.594-.012,.71,1.10]],.0032,dark);
+  for(const z of [-.62,-.02,.58])for(const sign of [-1,1])
+    box(.008,.012,.010,trim,sign*(roomWidth/2-.014),sign>0?.71:.78,z,.001);
+
   // Rounded, squat boiler with a warm, contained furnace window.
   const boilerStart=room.children.length;
   box(.09,.012,.076,dark,-.105,.008,-.112);
@@ -201,6 +300,22 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
   wheel(-.185,.163,-.149,.010);wheel(.213,.102,-.147,.012);wheel(.070,.077,-.157,.009);
   gauge(.192,.133,-.15,.007);
   pipe([[.192,.127,-.155],[.192,.117,-.155],[.208,.111,-.165]],.0018,copper);
+
+  // The service wall is the one the play camera looks at, so it carries a last
+  // layer of small gear in the spans either side of the sign. Everything sits
+  // above the mascot's own height or outboard of him, so nothing is obscured.
+  pipe([[-.46,.245,-.170],[-.10,.245,-.170]],.0028,copper);
+  for(const x of [-.38,-.18])box(.009,.012,.008,trim,x,.232,-.174,.001);
+  pipe([[-.28,.245,-.170],[-.28,.205,-.170],[-.262,.19,-.170],[-.20,.19,-.170]],.0018,copper);
+  box(.040,.052,.011,steel,-.44,.175,-.172,.003);
+  box(.028,.038,.002,trim,-.44,.175,-.166,.002);
+  for(const dy of [-.010,.010])box(.014,.002,.002,dark,-.44,.175+dy,-.164,.0004);
+  gauge(-.30,.205,-.167,.009);
+  pipe([[.26,.015,-.170],[.26,.196,-.170],[.278,.214,-.170],[.40,.214,-.170]],.0040,steel);
+  for(const y of [.075,.155])box(.009,.012,.008,trim,.26,y,-.174,.001);
+  gauge(.435,.248,-.167,.008);
+  box(.026,.034,.010,trim,.46,.165,-.172,.002);
+  for(const x of [-.52,.54])for(const y of [.10,.20])box(.017,.023,.009,dark,x,y,-.173,.0015);
 
   // One loaded logo image, shared by every sign in the room.
   const texture=await new THREE.TextureLoader().loadAsync(new URL('../../art/main-nav-logo-2025-04-17-193A053A06.webp',import.meta.url).href);
@@ -229,6 +344,9 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
   // the service clusters already mounted there.
   sign(-roomWidth/2+.022,.31,-.42,.85,Math.PI/2);
   sign(roomWidth/2-.022,.27,.02,.72,-Math.PI/2);
+  // One each on the rear and front walls, in the spans the headers leave clear.
+  sign(.52,.40,back+.020,.62);
+  sign(-.86,.34,front-.020,.55,Math.PI);
 
   room.updateMatrixWorld(true);
   const collisionBoxes:CollisionBox[]=solidWalls.map(wallSlab);

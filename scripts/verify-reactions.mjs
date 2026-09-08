@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { ReactionGate, REACTION, sweatDrops, squealVoice, hardImpact } from '../src/game/reactions.ts';
+import { ReactionGate, REACTION, sweatDrops, squealVoice, hardImpact, gruntStrength } from '../src/game/reactions.ts';
+import { PLOP } from '../src/game/locomotion.ts';
 
 // --- Hard impact grunt -------------------------------------------------------
 {
@@ -18,6 +19,38 @@ import { ReactionGate, REACTION, sweatDrops, squealVoice, hardImpact } from '../
   assert(REACTION.gruntSpeed > .25 && REACTION.gruntSpeed < .33, 'the threshold clears every ordinary hop but is reachable by a drop');
   assert.equal(hardImpact(.2), 0, 'soft landings carry no hardness');
   assert.equal(hardImpact(10), 1, 'hardness is clamped');
+}
+
+// --- A visible plop is always audible ---------------------------------------
+{
+  const gate = new ReactionGate();
+  assert.equal(REACTION.gruntSpeed, PLOP.speed, 'anything that plops is also grunted at');
+  assert.equal(gate.grunt(PLOP.speed - .001), false, 'a landing too soft to plop is silent');
+  assert.equal(gate.grunt(PLOP.speed + .001), true, 'the first landing that plops grunts');
+  // Measured landings: settle .12, hop .22, ordinary drop .49, hardest .81.
+  assert.equal(gruntStrength(.22), 0, 'an ordinary hop makes no sound at all');
+  assert.equal(gruntStrength(.24), 0, 'a small drop is still silent');
+  const ordinary = gruntStrength(.49), pancake = gruntStrength(.81);
+  assert(ordinary > .3 && ordinary < .55, `an ordinary drop is a small oof, got ${ordinary}`);
+  assert(pancake > .95, `the hardest landing is a full oof, got ${pancake}`);
+  assert.equal(gruntStrength(9), 1, 'grunt loudness is clamped');
+  let previous = -1;
+  for (let v = 0; v <= 1.2; v += .05) {
+    const value = gruntStrength(v);
+    assert(value >= previous, 'grunt loudness is monotonic in impact speed');
+    previous = value;
+  }
+}
+
+// Widening the grunt must not have moved sweat with it.
+{
+  const gate = new ReactionGate();
+  assert.equal(REACTION.sweatSpeed, .32, 'the sweat threshold is unchanged');
+  assert.equal(hardImpact(REACTION.sweatSpeed), 0, 'sweat hardness still starts at its own threshold');
+  assert.equal(gate.impactSweat(.30), 0, 'a landing that grunts need not sweat');
+  assert(gate.grunt(.30), 'that same landing does grunt');
+  assert.equal(sweatDrops(.32), REACTION.minDrops);
+  assert.equal(sweatDrops(.45), REACTION.maxDrops);
 }
 
 // A run of bouncing must not produce a grunt per bounce.
