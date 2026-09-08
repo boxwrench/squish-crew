@@ -4,7 +4,7 @@ import { squealVoice } from './reactions.ts';
 
 type AudioWindow=Window&{webkitAudioContext?:typeof AudioContext};
 type ToneShape=OscillatorType;
-const MUSIC_URL=new URL('../assets/music/Button_Nose_Parade.mp3',import.meta.url).href;
+const MUSIC_URL=new URL('../assets/music/Steam_Valve_Open_loop.mp3',import.meta.url).href;
 const HOP_SCALE=[261.63,293.66,329.63,392,440,523.25];
 
 /** One shared Web Audio graph for physical contact, cartoon cues, and music. */

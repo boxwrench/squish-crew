@@ -1,18 +1,32 @@
 # Squish Crew
 
-A mobile-first soft mascot physics toy with one round, deformable bean-person
-body, built on the inherited Droppie WebGPU engine and interaction architecture.
+A mobile-first soft-body physics toy: one round, deformable union mascot who
+reacts to being squished, standing in a cartoon boiler room. Built on the
+inherited Droppie WebGPU engine and interaction architecture.
 
-The opaque skin/navy/denim prototype now has two tiny spring-driven legs and
-chunky brown boots, short lagging arms, sunglasses, facial hair, and a navy `39`
-cap. Surface-bound collar, pockets and buttons define the work shirt above the
-jeans. The settled body measures about 73 × 59 × 48 mm (height ×
-width × depth). See [Phase 2 measurements](docs/phase-2.md) and
-[Phase 3 legs](docs/phase-3.md) for tuning, validation and limitations.
-The [attached character details](docs/character-details.md) extend that same
-surface-binding approach without changing the physical body.
-The inherited Droppie tutorials below describe the technical lineage; their
-water-material discussion is historical, not the current character material.
+**The mascot.** An opaque skin/navy/denim bean-person with two tiny
+spring-driven legs and chunky brown boots, short lagging arms, sunglasses,
+facial hair, and a navy `39` cap. Surface-bound collar, pockets and buttons
+define the work shirt above the jeans. The settled body measures about
+73 × 59 × 48 mm (height × width × depth).
+
+**The reactions.** A hard landing draws a procedural "oof" grunt and flicks off
+two to six cartoon sweat drops; pulling a grip to its limit raises a strained
+squeal that climbs into a comic squeal, plus one small sweat burst. Every
+reaction is rate-limited so ordinary bouncing and dragging stay quiet. See
+[`src/game/reactions.ts`](src/game/reactions.ts) for the thresholds and
+`npm run test:reactions` for the gating checks.
+
+**The room.** A cartoon boiler room — painted concrete, boiler, pipework, valve
+wheels and one enamel wall sign — replaces the earlier wood table. The mascot's
+refractive shadow is still projected onto the floor.
+
+See [Phase 2 measurements](docs/phase-2.md) and [Phase 3 legs](docs/phase-3.md)
+for tuning, validation and limitations. The
+[attached character details](docs/character-details.md) extend that same
+surface-binding approach without changing the physical body. The inherited
+Droppie tutorials below describe the technical lineage; their water-material and
+wet-floor discussion is historical, not the current character or environment.
 
 ## Play with Squish Crew
 
@@ -24,8 +38,8 @@ to reset, and Escape to release. Sound unlocks after interaction; the buttons
 in the top-right mute sound and reset the toy.
 
 The demo needs a WebGPU-capable recent browser and a secure context (HTTPS or
-localhost). The first visit downloads roughly 12 MB of textures and an HDR
-environment; later visits use the browser cache.
+localhost). The first visit downloads roughly 9 MB — an HDR environment, the
+mascot cage, the music track and the bundle; later visits use the browser cache.
 
 ## What this project teaches
 
@@ -160,8 +174,10 @@ after a pointer, touch, or keyboard gesture. It primes the output for mobile
 browser policies, routes procedural oscillators and short noise buffers through
 a master gain and compressor, and fades the master to zero when muted. Landing
 sound is built from damped sine modes plus a filtered noise transient. The
-background music is the looped `Button_Nose_Parade.mp3` asset at a quiet `.15`
-music gain; if it cannot be fetched or decoded, the small synthesized melody
+background music is the looped `Steam_Valve_Open_loop.mp3` asset at a quiet
+`.15` music gain, played through one `AudioBufferSourceNode` with `loop = true`.
+The file is cut to a whole 33 bars at 150 BPM and seam-crossfaded so the wrap is
+inaudible; if it cannot be fetched or decoded, the small synthesized melody
 remains as a fallback. Facility audio uses the same context, and no audio
 package dependency is required.
 
@@ -281,14 +297,15 @@ Squish Crew is derived from
 `528e15bb9248f1f15eaaa838fd260860d0d2825c`. The original source was inspected
 and its build architecture retained. The upstream repository remains the
 reference for the solver, WebAssembly kernel, optical worker, caustic pipeline,
-HDR environment, and wood assets. Droppie replaces the generated humanoid with
-a droplet and leaves the upstream facility modules available as reference.
+and HDR environment. Droppie replaced the generated humanoid with a droplet;
+Squish Crew replaces the droplet with the union mascot and the table with the
+boiler room, and leaves the upstream facility modules available as reference.
 
 Original Droppie contributions are released under the [MIT License](LICENSE).
 When redistributing them, retain the copyright and permission notice. The
 Jelly-Baby-derived portions and upstream assets remain subject to their own
-terms. `Button_Nose_Parade.mp3` is a project-supplied music asset and should be
-redistributed only with the creator's permission and attribution.
+terms. `Steam_Valve_Open_loop.mp3` is a project-supplied music asset and should
+be redistributed only with the creator's permission and attribution.
 
 ## Further reading
 
