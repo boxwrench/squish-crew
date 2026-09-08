@@ -148,6 +148,34 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
     wheel(.115,.135,.014,.016);
     box(.011,.024,.009,trim,-.09,.30,-.004,.001);
   });
+  // A second pass of the same kit fills the sparse spans, so the room reads as
+  // a larger plant rather than one dressed corner repeated.
+  cluster(.95,back+.028,0,()=>{
+    pipe([[-.06,.02,0],[-.06,.35,0],[-.035,.375,0],[.19,.375,0]],.0055,steel);
+    pipe([[.06,.02,0],[.06,.24,0],[.082,.262,0],[.19,.262,0]],.0035,copper);
+    box(.034,.05,.012,trim,-.06,.19,.004,.002);
+    wheel(.06,.135,.013,.013);
+  });
+  cluster(-.55,front-.026,Math.PI,()=>{
+    pipe([[-.13,.34,0],[.05,.34,0],[.072,.316,0],[.072,.02,0]],.005,copper);
+    gauge(.072,.215,.012,.011);
+    box(.026,.04,.011,steel,-.11,.28,.004,.002);
+    box(.018,.028,.002,trim,-.11,.28,.010,.001);
+  });
+  cluster(-roomWidth/2+.027,-.62,Math.PI/2,()=>{
+    pipe([[-.14,.03,0],[-.14,.22,0],[-.115,.245,0],[.10,.245,0],[.125,.27,0],[.125,.44,0]],.0045,steel);
+    wheel(-.14,.135,.012,.014);
+    pipe([[.02,.03,0],[.02,.155,0],[.045,.18,0],[.125,.18,0]],.0025,copper);
+  });
+  cluster(roomWidth/2-.027,-.45,-Math.PI/2,()=>{
+    pipe([[0,.02,0],[0,.29,0],[.024,.315,0],[.20,.315,0]],.006,dark);
+    gauge(-.05,.20,.010,.012);
+    pipe([[0,.165,0],[-.032,.165,.006],[-.05,.185,.006]],.0022,copper);
+    box(.03,.042,.011,trim,.14,.20,.004,.002);
+  });
+  // Two long runs tie the far spans together instead of leaving bare wall.
+  pipe([[-1.55,.50,-.94],[1.55,.50,-.94]],.0045,copper);
+  pipe([[-1.55,.22,1.14],[-.30,.22,1.14],[-.26,.26,1.14],[1.55,.26,1.14]],.0038,trim);
 
   // Rounded, squat boiler with a warm, contained furnace window.
   const boilerStart=room.children.length;
@@ -174,25 +202,33 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
   gauge(.192,.133,-.15,.007);
   pipe([[.192,.127,-.155],[.192,.117,-.155],[.208,.111,-.165]],.0018,copper);
 
-  // The supplied logo is used once, unchanged, on one cream enamel wall sign.
-  const signStart=room.children.length;
-  box(.137,.045,.005,dark,.101,.125,-.177,.003);
-  box(.132,.040,.002,cream,.101,.125,-.1735,.002);
+  // One loaded logo image, shared by every sign in the room.
   const texture=await new THREE.TextureLoader().loadAsync(new URL('../../art/main-nav-logo-2025-04-17-193A053A06.webp',import.meta.url).href);
   texture.colorSpace=THREE.SRGBColorSpace;
   const logoMaterial=new THREE.MeshBasicNodeMaterial({map:texture,transparent:true,depthWrite:false});materials.push(logoMaterial);
-  mesh(new THREE.PlaneGeometry(.119,.0353),logoMaterial,.101,.125,-.1718);
-  for(const x of [.04,.162])for(const y of [.110,.140])disc(.0012,.0006,dark,x,y,-.172);
-  // Larger and left of the original position to keep the complete "39" in
-  // the default camera. Scale depth positions too: otherwise the enlarged
-  // enamel face intersects the logo plane and causes shimmering lettering.
-  const signScale=1.25;
-  for(const part of room.children.slice(signStart)) {
-    part.position.x=.040+(part.position.x-.101)*signScale;
-    part.position.y=.130+(part.position.y-.125)*signScale;
-    part.position.z=-.177+(part.position.z+.177)*signScale;
-    part.scale.multiplyScalar(signScale);
-  }
+  /**
+   * One enamel Local 39 sign, authored face-on around its own centre and then
+   * placed, turned onto its wall and scaled as a unit. Depth offsets scale with
+   * everything else, so an enlarged enamel face cannot intersect the logo plane
+   * and shimmer.
+   */
+  const sign=(x:number,y:number,z:number,scale:number,yaw=0)=>{
+    const first=room.children.length;
+    box(.137,.045,.005,dark,0,0,0,.003);
+    box(.132,.040,.002,cream,0,0,.0035,.002);
+    mesh(new THREE.PlaneGeometry(.119,.0353),logoMaterial,0,0,.0052);
+    for(const dx of [-.061,.061])for(const dy of [-.015,.015])disc(.0012,.0006,dark,dx,dy,.005);
+    const group=new THREE.Group();group.name='local-39-sign';
+    group.add(...room.children.slice(first));
+    group.position.set(x,y,z);group.rotation.y=yaw;group.scale.setScalar(scale);
+    room.add(group);
+  };
+  // The main sign keeps its position and 1.25 scale on the service wall.
+  sign(.040,.130,-.177,1.25);
+  // Two smaller repeats on the side walls, well clear of the play area and of
+  // the service clusters already mounted there.
+  sign(-roomWidth/2+.022,.31,-.42,.85,Math.PI/2);
+  sign(roomWidth/2-.022,.27,.02,.72,-Math.PI/2);
 
   room.updateMatrixWorld(true);
   const collisionBoxes:CollisionBox[]=solidWalls.map(wallSlab);
