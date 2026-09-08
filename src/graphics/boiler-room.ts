@@ -54,25 +54,34 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
     disc(.0012,.0007,black,x,y,z+.0045);
   };
 
-  // Taller back and quiet return walls keep orbit/wide views inside the shop.
-  // All scenery stays well outside the central play area.
-  box(.9,.48,.012,wall,0,.24,-.196,.001);
-  box(.9,.065,.003,lowerWall,0,.034,-.188,.001);
-  box(.9,.018,.017,trim,0,.009,-.186,.001);
+  // The outer shell exceeds the maximum .42m camera orbit in every horizontal
+  // direction. Machinery keeps its close composition inside this larger room.
+  const roomWidth=3.2,roomHeight=1.4,back=-1.0,front=1.2,roomDepth=front-back;
+  box(roomWidth,roomHeight,.012,wall,0,roomHeight/2,back,.001);
+  box(roomWidth,.065,.003,lowerWall,0,.034,back+.008,.001);
+  box(roomWidth,.018,.017,trim,0,.009,back+.01,.001);
+  box(roomWidth,roomHeight,.012,wall,0,roomHeight/2,front,.001);
+  box(roomWidth,.018,.017,trim,0,.009,front-.01,.001);
+  // A broad single-sided service wall preserves the close mounted-machinery
+  // composition; from behind it vanishes so an orbit still sees the mascot.
+  mesh(new THREE.PlaneGeometry(roomWidth,roomHeight),wall,0,roomHeight/2,-.196);
+  mesh(new THREE.PlaneGeometry(roomWidth,.065),lowerWall,0,.0325,-.195);
+  mesh(new THREE.PlaneGeometry(roomWidth,.012),trim,0,.006,-.194);
   for(const sign of [-1,1]) {
-    box(.012,.48,.59,wall,sign*.455,.24,.095,.001);
-    box(.003,.065,.59,lowerWall,sign*.447,.034,.095,.001);
-    box(.016,.018,.59,trim,sign*.44,.009,.095,.001);
+    box(.012,roomHeight,roomDepth,wall,sign*roomWidth/2,roomHeight/2,(front+back)/2,.001);
+    box(.003,.065,roomDepth,lowerWall,sign*(roomWidth/2-.008),.034,(front+back)/2,.001);
+    box(.016,.018,roomDepth,trim,sign*(roomWidth/2-.015),.009,(front+back)/2,.001);
     // Small conduit/junction silhouettes continue the room without competing
     // with the boiler, mascot, or the single union sign.
-    pipe([[sign*.35,.014,-.181],[sign*.35,.204,-.181],[sign*.374,.222,-.181],[sign*.44,.222,-.172],[sign*.443,.222,.16]],.0026,trim);
+    pipe([[sign*.35,.014,-.181],[sign*.35,.204,-.181],[sign*.374,.222,-.24],[sign*1.55,.222,-.96],[sign*1.57,.222,.96]],.0026,trim);
     box(.021,.029,.011,steel,sign*.35,.114,-.179,.002);
     box(.013,.020,.002,trim,sign*.35,.114,-.1725,.001);
   }
   // Quiet wall seams keep the machinery readable without a busy brick pattern.
-  for(const x of [-.23,-.035,.20])box(.001,.44,.002,lowerWall,x,.25,-.188,.0004);
-  box(.9,.004,.004,trim,0,.231,-.185,.001);
-  box(.9,.003,.004,trim,0,.067,-.184,.001);
+  for(const x of [-1.2,-.6,0,.6,1.2])box(.002,roomHeight,.002,lowerWall,x,roomHeight/2,back+.008,.0004);
+  box(roomWidth,.004,.004,trim,0,.231,back+.011,.001);
+  box(roomWidth,.003,.004,trim,0,.067,back+.012,.001);
+  pipe([[-1.56,.36,.90],[-1.56,.36,-.91],[-1.48,.36,-.96],[1.48,.36,-.96],[1.56,.36,-.91],[1.56,.36,.90]],.008,dark);
 
   // Rounded, squat boiler with a warm, contained furnace window.
   const boilerStart=room.children.length;

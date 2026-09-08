@@ -21,12 +21,14 @@ export class BackSquirm {
       for(let k=0;k<3;k++)speedSquared+=this.body.velocity[i+k]**2;
     }
     const speed=Math.sqrt(speedSquared/(this.body.x.length/3));
-    const eligible=this.body.grabs.length===0&&floor<.004&&floor>-.006&&speed<.065&&
-      this.front.y>(this.time>=0?.55:.72);
+    // Allow a rocking, partly rolled-back body to panic before it settles.
+    // Hysteresis prevents small orientation changes from restarting the beat.
+    const eligible=this.body.grabs.length===0&&floor<.012&&floor>-.012&&speed<.38&&
+      this.front.y>(this.time>=0?.28:.45);
     if(!eligible){this.reset();return;}
     const h=Math.min(Math.max(dt,0),.05);
     this.quietTime+=h;
-    if(this.quietTime>.16)this.time=this.time<0?0:this.time+h;
+    if(this.quietTime>.08)this.time=this.time<0?0:this.time+h;
   }
   reset(){this.time=-1;this.quietTime=0;}
 }

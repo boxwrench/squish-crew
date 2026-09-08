@@ -43,8 +43,12 @@ export class MascotArms {
     for(let i=0;i<2;i++) {
       this.pivots[i].position.copy(this.anchors[i].point);
       const t=this.squirmTime;
-      const wiggle=t<0?0:.26*Math.sin(t*6.1+i*2.2)+.08*Math.sin(t*9.3+i);
-      this.euler.set(THREE.MathUtils.clamp(this.angles[i]+wiggle,-ARM_TUNING.limit,ARM_TUNING.limit),0,(i===0?-1:1)*(.42+(t<0?0:.10*Math.sin(t*4.7+i*1.8))));
+      const ramp=t<0?0:Math.min(1,t/.06);
+      const burst=.65+.35*Math.sin(t*8.3+i*2)**2;
+      // Frequencies are cycles/second, not radians/second. Cosmetic only.
+      const wiggle=t<0?0:ramp*burst*(.88*Math.sin(2*Math.PI*(6.2+i*.8)*t+i*2.1+.3*Math.sin(t*3.1))+.18*Math.sin(2*Math.PI*8.7*t+i));
+      const limit=t<0?ARM_TUNING.limit:1.12;
+      this.euler.set(THREE.MathUtils.clamp(this.angles[i]+wiggle,-limit,limit),0,(i===0?-1:1)*(.42+(t<0?0:ramp*.32*Math.sin(2*Math.PI*5.3*t+i*2))));
       this.swing.setFromEuler(this.euler);this.pivots[i].quaternion.copy(this.anchors[i].quaternion).multiply(this.swing);
     }
     this.revision++;

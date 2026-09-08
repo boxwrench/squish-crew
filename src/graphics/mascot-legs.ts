@@ -94,8 +94,11 @@ export class MascotLegs {
     for(let i=0;i<2;i++) {
       this.pivots[i].position.copy(this.anchors[i].point);
       const t=this.squirmTime;
-      const kick=t<0?0:-.18+.32*Math.sin(t*5.4+i*2.4)+.09*Math.sin(t*8.2+i);
-      const spread=t<0?0:.12+.10*Math.sin(t*4.1+i*1.9);
+      const ramp=t<0?0:Math.min(1,t/.06);
+      const burst=.55+.45*Math.sin(t*7.1+i*1.7)**2;
+      const bigKick=Math.max(0,Math.sin(t*8.6+i*2.4))**8;
+      const kick=t<0?0:ramp*(-.12+burst*(.90*Math.sin(2*Math.PI*(7.1+i*.7)*t+i*2.4+.25*Math.sin(t*2.7))+.20*Math.sin(2*Math.PI*9.4*t+i))-.35*bigKick);
+      const spread=t<0?0:ramp*(.20+.28*Math.sin(2*Math.PI*6.3*t+i*2.2));
       this.euler.set(THREE.MathUtils.clamp(this.angle[i]+kick,-LEG_TUNING.limit,LEG_TUNING.limit),0,(i===0?-1:1)*(.12+THREE.MathUtils.clamp(this.splay[i]+spread,-.38,.9)));
       this.swing.setFromEuler(this.euler);this.pivots[i].quaternion.copy(this.frame).multiply(this.swing);
     }
