@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import type { SoftBody } from '../physics/soft-body.js';
+import { MascotLegs } from './mascot-legs.ts';
 import { DEFAULT_JELLY_FLAVOR, JELLY_FLAVORS, type JellyFlavorName } from './jelly-flavors.ts';
 
 export const ABSORPTION=JELLY_FLAVORS[DEFAULT_JELLY_FLAVOR].absorption;
@@ -9,6 +10,7 @@ export class Baby {
   readonly group=new THREE.Group();
   private readonly jellyMaterial:THREE.MeshPhysicalNodeMaterial;
   readonly body:SoftBody;
+  readonly legs:MascotLegs;
   constructor(body:SoftBody) {
     this.body=body;
     const material=new THREE.MeshPhysicalNodeMaterial({
@@ -27,6 +29,7 @@ export class Baby {
     this.mesh=new THREE.Mesh(body.surface.geometry,material);
     this.mesh.renderOrder=1;
     this.mesh.frustumCulled=false;this.group.add(this.mesh);
+    this.legs=new MascotLegs(body,this.group);
     this.update();
   }
   setFlavor(flavor:JellyFlavorName) {
@@ -37,8 +40,8 @@ export class Baby {
       THREE.LinearSRGBColorSpace,
     );
   }
-  update(...args:unknown[]) { void args; }
-  resetFace() {}
+  update(dt=0) { this.legs.update(dt); }
+  resetFace() { this.legs.reset(); }
   dispose() {
     this.group.traverse(object=>{
       if(object instanceof THREE.Mesh) {

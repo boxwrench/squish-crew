@@ -17,6 +17,7 @@ import { FacilityShadows } from '../graphics/facility-shadows.ts';
 import { SplashParticles } from '../water/splash-particles.ts';
 import { Puddle } from '../water/puddle.ts';
 import { quality, observeFrame } from '../graphics/quality.ts';
+import type { LegSnapshot } from '../graphics/mascot-legs.ts';
 
 export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
   stage('Starting WebGPU');
@@ -43,6 +44,7 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
   const rig=new Locomotion(body);
   let splashCooldown=0;
   rig.onContact=(speed,foot)=>{
+    baby.legs.impact(speed);
     sound.contact(speed,foot);
     if(speed>.35&&splashCooldown<=0) {
       splashCooldown=.25;
@@ -57,10 +59,18 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
   if(import.meta.env.DEV)Object.defineProperty(window,'dropletDebug',{configurable:true,get:()=>({
     center:body.center.toArray(),sleeping:body.sleeping,grabs:body.grabs.length,volume:body.volumeRatio(),
     camera:camera.position.toArray(),finite:body.isFinite(),quality:{...quality},
+    legs:baby.legs.debug,
+    inspectLegPose:(pose:{positions:number[];legState:LegSnapshot})=>{
+      const positions=pose.positions;
+      if(positions.length!==body.x.length||positions.some(v=>!Number.isFinite(v)))throw new Error('Invalid inspection pose');
+      reset();inspectionPaused=true;body.x.set(positions);body.previous.set(positions);body.velocity.fill(0);body.updateSurface();
+      baby.legs.restoreInspection(pose.legState);input.recenter();input.update(10);
+      camera.position.copy(input.controls.target).add(new THREE.Vector3(.025,.11,.23));input.controls.update();
+    },
     // Replay measured physics states for repeatable prototype screenshot review.
     inspectPose:(positions:number[])=>{
       if(positions.length!==body.x.length||positions.some(v=>!Number.isFinite(v)))throw new Error('Invalid inspection pose');
-      reset();inspectionPaused=true;body.x.set(positions);body.previous.set(positions);body.velocity.fill(0);body.updateSurface();input.recenter();input.update(10);
+      reset();inspectionPaused=true;body.x.set(positions);body.previous.set(positions);body.velocity.fill(0);body.updateSurface();baby.legs.reset();input.recenter();input.update(10);
       camera.position.copy(input.controls.target).add(new THREE.Vector3(.025,.13,.27));input.controls.update();
     },
     thickness:[Math.min(...body.surface.geometry.attributes.opticalThickness.array),Math.max(...body.surface.geometry.attributes.opticalThickness.array)],
@@ -104,7 +114,7 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
   lastTime=performance.now();
   const renderedCamera=new THREE.Vector3(Infinity,Infinity,Infinity);
   const renderedRotation=new THREE.Quaternion();
-  let renderedSurface=-1,renderedFace=-1,renderedThickness=-1,renderedDpr=-1;
+  let renderedSurface=-1,renderedFace=-1,renderedThickness=-1,renderedDpr=-1,renderedLegs=-1;
   let renderedSize='';
   const frame=(time:number)=>{
     if(disposed)return;
@@ -120,7 +130,7 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
         if(!body.isFinite())throw new Error('The soft-body simulation produced an invalid state');
         body.updateSurface();
       }
-      baby.update(dt);
+      if(!inspectionPaused)baby.update(dt);
       if(observeFrame(dt))resize();
       transport.rate=quality.opticalHz;
       splashCooldown=Math.max(0,splashCooldown-dt);
@@ -135,10 +145,10 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
       const faceVersion=baby.group.children.reduce((sum,child)=>sum+(((child as THREE.Mesh).geometry?.attributes.position as THREE.BufferAttribute|undefined)?.version??0),0);
       const thicknessVersion=body.surface.geometry.attributes.opticalThickness.version;
       const size=renderer.domElement.width+','+renderer.domElement.height;
-      if(!body.sleeping||splash.active||puddleChanged||renderedSurface!==body.surfaceRevision||renderedFace!==faceVersion||
+      if(!body.sleeping||splash.active||puddleChanged||renderedLegs!==baby.legs.revision||renderedSurface!==body.surfaceRevision||renderedFace!==faceVersion||
         renderedThickness!==thicknessVersion||renderedDpr!==renderer.getPixelRatio()||renderedSize!==size||
         renderedCamera.distanceToSquared(camera.position)>1e-12||renderedRotation.angleTo(camera.quaternion)>1e-6) {
-        composite.render();renderedSurface=body.surfaceRevision;renderedFace=faceVersion;
+        composite.render();renderedSurface=body.surfaceRevision;renderedFace=faceVersion;renderedLegs=baby.legs.revision;
         renderedThickness=thicknessVersion;renderedDpr=renderer.getPixelRatio();renderedSize=size;
         renderedCamera.copy(camera.position);renderedRotation.copy(camera.quaternion);
       }
