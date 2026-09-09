@@ -272,18 +272,21 @@ export class JellySound {
     this.voice(t,base,.58,.20,.16+.28*amount,[650,450],[1120,820],.035+.05*amount);
   }
 
-  /** A small amused "heh-heh-heh" for being poked once too often. */
+  /** A reluctant stationary-engineer chuckle for being poked once too often. */
   giggle() {
     const ctx=this.context;if(!ctx||this.muted)return;
     // A poke also fires the hop boing, so the chuckle waits for its attack to
     // pass rather than competing with it: boing first, then he finds it funny.
-    const t=ctx.currentTime+.10,base=158+Math.random()*20;
-    // Three descending voiced pulses, low enough to belong to a squat worker.
-    const bends=[.93,.9,.88],steps=[1,.94,.87],levels=[.27,.24,.19];
-    for(let i=0;i<3;i++) {
-      const at=t+i*.115+(i?Math.random()*.012:0);
-      this.voice(at,base*steps[i],bends[i],.085,levels[i],[570,500],[1060,900],.035);
-    }
+    const t=ctx.currentTime+.10;
+    // Two short irregular "heh" pulses instead of three clean descending
+    // tones: lower than the grunt, breathier, each starting with an aspirated
+    // hiss and wobbling down on its own. Reluctantly amused, not musical.
+    const first=126+Math.random()*12;
+    this.noise(t-.015,.05,.05,900,1.2);
+    this.voice(t,first,.94,.10,.26,[620,520],[1500,1200],.05);
+    const at=t+.125+Math.random()*.035,second=first*(.9+Math.random()*.06);
+    this.noise(at-.015,.055,.055,820,1.2);
+    this.voice(at,second,.84,.13,.22,[600,480],[1450,1150],.06);
   }
 
   /**

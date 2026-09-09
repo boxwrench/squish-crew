@@ -33,7 +33,7 @@ export async function createRenderer(fail:(e:unknown)=>void) {
   renderer.outputColorSpace=THREE.SRGBColorSpace;
   renderer.toneMapping=THREE.AgXToneMapping;renderer.toneMappingExposure=1.05;
   renderer.domElement.tabIndex=0;
-  renderer.domElement.setAttribute('aria-label','Droplet. Tap to hop, drag to stretch and release to throw. Drag the floor to orbit, pinch to zoom. Space to hop, R to reset.');
+  renderer.domElement.setAttribute('aria-label','Boilerplate Bash. Tap to hop, drag to stretch and release to throw. Drag the floor to orbit, pinch to zoom. Space to hop, R to reset.');
   return renderer;
 }
 

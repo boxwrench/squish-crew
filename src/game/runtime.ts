@@ -27,7 +27,7 @@ import { quality, observeFrame } from '../graphics/quality.ts';
 import type { LegSnapshot } from '../graphics/mascot-legs.ts';
 
 export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
-  stage('Starting WebGPU');
+  stage('Opening the boiler room…');
   const renderer=await createRenderer(fail);
   document.querySelector('#viewport')!.appendChild(renderer.domElement);
   // Construct audio before the remaining async scene work so the first mobile
@@ -37,9 +37,9 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
   scene.background=new THREE.Color('#e8d9c3');scene.fog=new THREE.Fog('#e8d9c3',2,12);
   const camera=new THREE.PerspectiveCamera(36,1,.001,40);
   camera.position.set(.015,.115,.175);
-  stage('Reading the light');
+  stage('Turning on the lights…');
   const environment=await loadEnvironment(renderer,scene);
-  stage('Preparing the mascot');
+  stage('Finding the engineer…');
   const body=new SoftBody(await loadBabyCage());
   const baby=new Baby(body);scene.add(baby.group);
   const optics=new RefractiveLightField(body.cage.opticalSurface,environment.incoming,ABSORPTION);
@@ -242,15 +242,15 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
     button.classList.toggle('muted',muted);void sound.unlock().catch(()=>{});
     if((event as MouseEvent).detail>0)(event.currentTarget as HTMLButtonElement).blur();
   });
-  stage('Settling in');
+  stage('Letting the pressure settle…');
   // Let contact establish itself before displaying the first frame.
   for(let i=0;i<80;i++){rig.step(PHYS.step);body.step(PHYS.step);}
   body.updateSurface();baby.update();input.update(1);
   optics.update(renderer,body,true);
   await transport.update();
-  stage('Compiling the material');
+  stage('Stoking the boiler…');
   await renderer.compileAsync(scene,camera);
-  stage('Drawing the first frame');
+  stage('Starting the shift…');
   composite.render();
   // Fence first-frame GPU work so validation/OOM cannot masquerade as a successful boot.
   const backend=renderer.backend as unknown as {device:GPUDevice};
