@@ -30,7 +30,8 @@ export class JellySound {
   private musicEnabled=true;
   private musicSource:AudioBufferSourceNode|null=null;
   private musicBuffer:AudioBuffer|null=null;
-  private musicLoadPromise:Promise<AudioBuffer|null>|null=null;
+  private musicFetchPromise:Promise<ArrayBuffer|null>|null=null;
+  private musicDecodePromise:Promise<AudioBuffer|null>|null=null;
   private hopIndex=0;
   private musicStep=0;
   private musicNextTime=0;
@@ -38,6 +39,14 @@ export class JellySound {
 
   constructor() {
     const signal=this.abort.signal;
+    // The loop MP3 is small (~634 KB): start downloading it right away so the
+    // network leg usually finishes while the game is still loading. Fetching
+    // needs no AudioContext and never blocks startup; decoding and playback
+    // still wait for the first unlock, so autoplay rules are unchanged.
+    this.musicFetchPromise=fetch(MUSIC_URL).then(response=>{
+      if(!response.ok)throw new Error(`Music request failed: ${response.status}`);
+      return response.arrayBuffer();
+    }).catch(()=>null);
     window.addEventListener('pointerdown',this.unlockFromGesture,{signal});
     window.addEventListener('touchstart',this.unlockFromGesture,{passive:true,signal});
     window.addEventListener('keydown',this.unlockFromGesture,{signal});
@@ -272,21 +281,20 @@ export class JellySound {
     this.voice(t,base,.58,.20,.16+.28*amount,[650,450],[1120,820],.035+.05*amount);
   }
 
-  /** A reluctant stationary-engineer chuckle for being poked once too often. */
+  /** A tiny delighted "hee-hee-hee" for being poked once too often. */
   giggle() {
     const ctx=this.context;if(!ctx||this.muted)return;
-    // A poke also fires the hop boing, so the chuckle waits for its attack to
-    // pass rather than competing with it: boing first, then he finds it funny.
-    const t=ctx.currentTime+.10;
-    // Two short irregular "heh" pulses instead of three clean descending
-    // tones: lower than the grunt, breathier, each starting with an aspirated
-    // hiss and wobbling down on its own. Reluctantly amused, not musical.
-    const first=126+Math.random()*12;
-    this.noise(t-.015,.05,.05,900,1.2);
-    this.voice(t,first,.94,.10,.26,[620,520],[1500,1200],.05);
-    const at=t+.125+Math.random()*.035,second=first*(.9+Math.random()*.06);
-    this.noise(at-.015,.055,.055,820,1.2);
-    this.voice(at,second,.84,.13,.22,[600,480],[1450,1150],.06);
+    // A poke also fires the hop boing, so the giggle waits for its attack to
+    // pass rather than competing with it: boing first, then he laughs.
+    const t=ctx.currentTime+.10,base=232+Math.random()*26;
+    // Three very short bright pulses: the first two lift a little, the last
+    // settles. A light "ee" vowel and a breath of air keep it cute, well
+    // above the grunt's low "uh" and nothing like the continuous squeal.
+    const bends=[1.07,1.04,.9],levels=[.24,.22,.18];
+    for(let i=0;i<3;i++) {
+      const at=t+i*.095+(i?Math.random()*.014:0);
+      this.voice(at,base*(1+Math.random()*.03-.015),bends[i],.07,levels[i],[450,400],[2200,1900],.02);
+    }
   }
 
   /**
@@ -428,13 +436,14 @@ export class JellySound {
       if(this.musicNextTime<t-.1)this.musicNextTime=t+.08;
     }
     if(this.musicSource)return;
-    if(this.musicLoadPromise===null) {
-      this.musicLoadPromise=fetch(MUSIC_URL).then(response=>{
-        if(!response.ok)throw new Error(`Music request failed: ${response.status}`);
-        return response.arrayBuffer();
-      }).then(data=>ctx.decodeAudioData(data)).catch(()=>null);
+    if(this.musicDecodePromise===null) {
+      const fetchPromise=this.musicFetchPromise;
+      this.musicDecodePromise=(fetchPromise?fetchPromise.then(data=>{
+        if(!data)throw new Error('Music fetch failed');
+        return ctx.decodeAudioData(data);
+      }):Promise.resolve(null)).catch(()=>null);
     }
-    void this.musicLoadPromise.then(buffer=>{
+    void this.musicDecodePromise.then(buffer=>{
       if(buffer)this.musicBuffer=buffer;
       if(this.musicBuffer&&this.context===ctx&&this.musicEnabled&&!this.muted&&!document.hidden) {
         this.startMusicTrack(ctx,this.musicBuffer);
