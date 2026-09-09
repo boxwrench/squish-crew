@@ -40,6 +40,21 @@ function setup(useJS=false) {
 }
 
 const results=[];
+// Rapid taps can arrive between physics frames. Count each completed poke,
+// but never flush a pending drag's final throw sample to accept a new press.
+{
+  const {input,body,event,step}=setup();let pokes=0;input.onPoke=()=>pokes++;
+  for(let i=0;i<3;i++){const down=event(1);input.begin(down);input.end({...down,type:'pointerup'});}
+  step();step();assert.equal(pokes,3,'three between-frame taps remain three pokes');
+  assert.equal(body.grabs.length,0);input.dispose();
+}
+{
+  const {input,body,event,step}=setup();let pokes=0;input.onPoke=()=>pokes++;
+  input.begin(event(1));const grip=body.grab;
+  input.pointerMove(event(1,'pointermove',40));input.end(event(1,'pointerup',40));
+  input.begin(event(1));assert.equal(body.grab,grip,'pending drag keeps its final physics sample');
+  step();step();assert.equal(pokes,0,'drag never counts as a poke');input.dispose();
+}
 for(const useJS of [false,true]) {
   const {input,body,camera,captured,event,step}=setup(useJS);
   input.begin(event(1));input.begin(event(2));

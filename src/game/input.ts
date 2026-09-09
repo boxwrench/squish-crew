@@ -112,7 +112,17 @@ export class Input {
   }
   private begin=(e:PointerEvent)=>{
     if(this.bodyControlled())return;
-    if(e.button!==0||this.grabs.has(e.pointerId)||this.body.grabs.length>=MAX_GRABS)return;
+    if(e.button!==0)return;
+    // At low frame rates a tap's release can still be waiting for its final
+    // physics sample when the next pointerdown arrives. Finish only a release
+    // already classified as an unmoved tap, so rapid same-pointer pokes are
+    // counted; never flush a drag, whose pending sample carries its throw.
+    const prior=this.grabs.get(e.pointerId);
+    if(prior) {
+      if(!prior.releasePending||!prior.tap)return;
+      this.finishRelease(e.pointerId);
+    }
+    if(this.body.grabs.length>=MAX_GRABS)return;
     // Only touch can add simultaneous grips; desktop mouse/pen keep one grip.
     if(this.body.grab&&(e.pointerType!=='touch'||[...this.grabs.values()].some(state=>state.pointerType!=='touch')))return;
     this.eventRay(e);

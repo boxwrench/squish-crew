@@ -202,7 +202,10 @@ export class JellySound {
 
   contact(speed:number,foot:boolean) {
     const ctx=this.context, out=this.sfxGain;
-    if(!ctx||!out||ctx.state==='closed'||this.muted)return;
+    // Contact is called from the fixed-step loop, which can run before the
+    // first user gesture unlocks Web Audio. Do not queue a stale landing while
+    // the context is suspended; all other SFX follow this same rule.
+    if(!ctx||!out||ctx.state!=='running'||this.muted)return;
     const t=ctx.currentTime,strength=Math.min(1,speed/.8);
     // Damped membrane modes remain the physical base, with a rounder cartoon plup.
     const base=(foot?185:118)+Math.random()*16;
@@ -239,7 +242,11 @@ export class JellySound {
     gain.gain.exponentialRampToValueAtTime(Math.max(.0002,level),start+Math.min(.026,duration*.22));
     gain.gain.exponentialRampToValueAtTime(.0001,start+duration);
     const nodes=[osc,gain];
-    for(const [[from,to],q,share] of [[f1,7,1],[f2,9,.55]] as const) {
+    // The source is a low cartoon voice (roughly 150–180 Hz), so its audible
+    // harmonics are sparse. Narrow filters (Q7/Q9) throw most of that energy
+    // away and let the contact thud/music mask the reaction. Wider formants
+    // preserve the vowel colour while keeping this voice short and contained.
+    for(const [[from,to],q,share] of [[f1,4.5,1],[f2,5.5,.62]] as const) {
       const formant=ctx.createBiquadFilter(),tap=ctx.createGain();
       formant.type='bandpass';formant.Q.value=q;
       formant.frequency.setValueAtTime(from,start);
@@ -262,7 +269,7 @@ export class JellySound {
     const t=ctx.currentTime+.028,amount=Math.max(0,Math.min(1,strength));
     const base=150+Math.random()*22;
     // An "uh" that falls away, the vowel a winded person actually makes.
-    this.voice(t,base,.58,.20,.11+.24*amount,[700,470],[1240,880],.03+.045*amount);
+    this.voice(t,base,.58,.20,.16+.28*amount,[650,450],[1120,820],.035+.05*amount);
   }
 
   /** A small amused "heh-heh-heh" for being poked once too often. */
@@ -272,10 +279,10 @@ export class JellySound {
     // pass rather than competing with it: boing first, then he finds it funny.
     const t=ctx.currentTime+.10,base=158+Math.random()*20;
     // Three descending voiced pulses, low enough to belong to a squat worker.
-    const bends=[.93,.9,.88],steps=[1,.94,.87],levels=[.20,.18,.135];
+    const bends=[.93,.9,.88],steps=[1,.94,.87],levels=[.27,.24,.19];
     for(let i=0;i<3;i++) {
       const at=t+i*.115+(i?Math.random()*.012:0);
-      this.voice(at,base*steps[i],bends[i],.085,levels[i],[610,540],[1180,1020],.028);
+      this.voice(at,base*steps[i],bends[i],.085,levels[i],[570,500],[1060,900],.035);
     }
   }
 
