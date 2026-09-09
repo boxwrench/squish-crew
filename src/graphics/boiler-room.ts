@@ -307,6 +307,49 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
   // and of the play centre, an easy fling to the mascot's right.
   const boilerVisuals=[makeBoiler(-.083,.070,-.112,1),makeBoiler(.152,.061,-.120,.86)];
 
+  /**
+   * The circulation pump: motor, volute housing, two pipe stubs, an exposed
+   * flywheel and a small indicator lamp. Deliberately few meshes, in the same
+   * cartoon language as the boilers.
+   */
+  const makePump=(x:number,y:number,z:number)=>{
+    const first=room.children.length;
+    const lamp=material('#5a6b52',.5,.1);lamp.emissive.set('#ffb02e');lamp.emissiveIntensity=0;
+    box(.062,.010,.052,dark,0,-.030,0);
+    box(.048,.040,.040,steel,0,-.006,0,.008);           // motor body
+    const housing=cylinder(.022,.020,steel,0,-.006,.030);housing.rotation.x=Math.PI/2;
+    disc(.011,.006,dark,0,-.006,.042);
+    pipe([[0,-.026,.040],[0,-.026,.056],[.014,-.012,.062]],.005,copper);
+    pipe([[-.024,-.006,.030],[-.040,-.006,.030],[-.048,.006,.024]],.0045,copper);
+    // The flywheel is the one moving part, so it reads at a glance.
+    const wheelGroup=new THREE.Group();
+    const rim=mesh(new THREE.TorusGeometry(.019,.0035,8,20),red,0,0,0);
+    const hub=cylinder(.005,.010,dark,0,0,0);hub.rotation.x=Math.PI/2;
+    for(const angle of [0,Math.PI/3,-Math.PI/3]) {
+      const spoke=box(.0035,.036,.0035,red,0,0,0,.0008);spoke.rotation.z=angle;
+      wheelGroup.add(spoke);
+    }
+    wheelGroup.add(rim,hub);wheelGroup.position.set(.032,-.006,0);
+    wheelGroup.rotation.y=Math.PI/2;
+    const indicator=disc(.005,.004,lamp,0,.018,.021);
+    box(.014,.005,.010,dark,0,.011,.021,.001);
+    const group=new THREE.Group();group.name='circulation-pump';
+    group.add(...room.children.slice(first));
+    group.add(wheelGroup);
+    group.position.set(x,y,z);room.add(group);
+    return {group,wheelGroup,lamp,indicator,base:group.position.clone(),
+      vent:new THREE.Vector3(0,.022,.040)};
+  };
+  // Front-left, on open floor: the boilers sit back against the service wall,
+  // so a fling at the pump is a clear line rather than a shot through them.
+  const pumpVisual=makePump(-.140,.038,-.017);
+
+  // A single amber beacon high on the service wall speaks for the whole room.
+  const beaconLamp=material('#6a6357',.45,.1);beaconLamp.emissive.set('#ffb02e');beaconLamp.emissiveIntensity=0;
+  box(.020,.008,.012,dark,-.30,.285,-.180,.002);
+  const beaconDome=mesh(new THREE.SphereGeometry(.010,12,8),beaconLamp,-.30,.294,-.180);
+
+
   // Broad bent runs and simple flange collars suggest a real plant room.
   pipe([[-.083,.126,-.115],[-.083,.157,-.115],[-.127,.173,-.148],[-.23,.173,-.163]],.010,dark);
   pipe([[-.24,.012,-.162],[-.24,.145,-.162],[-.219,.163,-.162],[.19,.163,-.162],[.213,.142,-.162],[.213,.018,-.162]],.0065,copper);
@@ -428,6 +471,44 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
     face.scale.copy(source.scale);source.visible=false;
   }
 
-  return {collisionBoxes,boilers,
+  // Gameplay handle for the pump: its own volume, its own presentation.
+  const pumpHalf=new THREE.Vector3(.062,.052,.062).multiplyScalar(.5);
+  const pump={
+    centre:pumpVisual.base.clone().applyMatrix4(room.matrixWorld),
+    half:new THREE.Vector3(pumpHalf.x*room.scale.x,pumpHalf.y*room.scale.y,pumpHalf.z*room.scale.z),
+    vent:pumpVisual.vent.clone().add(pumpVisual.base).applyMatrix4(room.matrixWorld),
+    /** Spin, lamp and rattle for one frame of pump state. */
+    update(speed:number,faulted:boolean,dt:number) {
+      pumpVisual.wheelGroup.rotation.x+=dt*speed*22;
+      // Amber and steady while healthy; a faster, harsher flicker when stalled.
+      const flicker=faulted?(Math.random()<.35?1:.15):0;
+      pumpVisual.lamp.emissiveIntensity=faulted?.35+flicker*1.4:.28+speed*.22;
+      pumpVisual.lamp.color.set(faulted?'#7a5a2a':'#5a6b52');
+      const rattle=faulted?.0022:0;
+      pumpVisual.group.position.set(
+        pumpVisual.base.x+(Math.random()-.5)*rattle,
+        pumpVisual.base.y+(Math.random()-.5)*rattle,
+        pumpVisual.base.z+(Math.random()-.5)*rattle*.6);
+    },
+    /** A caught motor kicks the housing and snaps the flywheel forward. */
+    jolt(strength:number) {
+      pumpVisual.wheelGroup.rotation.x+=strength*1.4;
+      pumpVisual.group.position.x=pumpVisual.base.x+(Math.random()-.5)*.007*strength;
+      pumpVisual.group.position.y=pumpVisual.base.y+(Math.random()-.5)*.007*strength;
+    },
+  };
+  /** The room's own opinion, shown on one beacon. */
+  const beacon={
+    update(mood:'smooth'|'warning'|'mishap',elapsed:number) {
+      if(mood==='smooth'){beaconLamp.emissiveIntensity=0;beaconDome.scale.setScalar(1);return;}
+      const pulse=.5+.5*Math.sin(elapsed*(mood==='mishap'?14:5));
+      beaconLamp.color.set(mood==='mishap'?'#8c2f1c':'#6a6357');
+      beaconLamp.emissive.set(mood==='mishap'?'#ff3d17':'#ffb02e');
+      beaconLamp.emissiveIntensity=(mood==='mishap'?1.9:.9)*(.35+.65*pulse);
+      beaconDome.scale.setScalar(1+pulse*(mood==='mishap'?.16:.07));
+    },
+  };
+
+  return {collisionBoxes,boilers,pump,beacon,
     dispose(){scene.remove(room);for(const g of geometries)g.dispose();for(const m of materials)m.dispose();texture.dispose();}};
 }

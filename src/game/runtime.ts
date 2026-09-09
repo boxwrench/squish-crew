@@ -18,8 +18,11 @@ import { SplashParticles } from '../water/splash-particles.ts';
 import { FacilityCollision, type CollisionBox } from '../physics/facility-collision.ts';
 import { ReactionGate, REACTION, hardImpact, gruntStrength } from './reactions.ts';
 import { makeBoilers, BOILER } from './boilers.ts';
+import { Pump } from './pump.ts';
+import { RoomMood } from './room-mood.ts';
 const BOILER_FULL_VENT=BOILER.maxDrop;
 const BOILER_REACH=.008;
+const PUMP_REACH=.016;
 import { quality, observeFrame } from '../graphics/quality.ts';
 import type { LegSnapshot } from '../graphics/mascot-legs.ts';
 
@@ -62,14 +65,54 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
     steam.burst(boilerRoom.boilers[index].vent,.10+.20*strength,count,undefined);
     boilerRoom.boilers[index].jolt(strength);
   };
+  // --- Circulation pump and the room's mood ---------------------------------
+  const pump=new Pump(Math.floor(Math.random()*1e6)+1);
+  const mood=new RoomMood();
+  let pumpInside=false,pumpApproach=0,moodClock=0;
+  /** One frame of pump state, its bonk volume and the room beacon. */
+  const stepPump=(dt:number)=>{
+    const event=pump.advance(dt);
+    if(event==='fault')sound.sputter(.5);
+    if(event==='sputter') {
+      // Nobody came: it coughs, catches, and limps on. That counts as drama.
+      sound.sputter(1);steam.burst(boilerRoom.pump.vent,.09,5,undefined);
+      boilerRoom.pump.jolt(.8);mood.mishap();
+    }
+    boilerRoom.pump.update(pump.speed,pump.faulted,dt);
+    sound.pumpHum(pump.speed);
+    const c=boilerRoom.pump.centre,h=boilerRoom.pump.half,b=body.center;
+    toBoiler.copy(c).sub(b);
+    const distance=toBoiler.length();
+    const approach=distance>1e-6?rig.velocity.dot(toBoiler)/distance:0;
+    pumpApproach=Math.max(approach,pumpApproach*.82);
+    // The pump is a smaller target than a boiler and stands well clear of the
+    // mascot's resting spot, so it can afford a slightly more forgiving skin.
+    const overlapping=Math.abs(b.x-c.x)<h.x+PUMP_REACH&&Math.abs(b.y-c.y)<h.y+PUMP_REACH
+      &&Math.abs(b.z-c.z)<h.z+PUMP_REACH;
+    if(overlapping&&!pumpInside&&pumpApproach>0) {
+      const caught=pump.bonk(pumpApproach);
+      if(caught>0) {
+        sound.thunk(caught);
+        boilerRoom.pump.jolt(1);
+        steam.burst(boilerRoom.pump.vent,.07,3,undefined);
+      }
+    }
+    pumpInside=overlapping;
+    // The room's own read on all of it, shown on one beacon.
+    moodClock+=dt;
+    let worst=0;for(const boiler of boilers)worst=Math.max(worst,boiler.pressure);
+    mood.update(dt,{maxPressure:worst,pumpFaulted:pump.faulted});
+    boilerRoom.beacon.update(mood.mood,moodClock);
+  };
+
   /** One frame of pressure, hit detection and feedback. */
   const stepBoilers=(dt:number)=>{
     hissTimer-=dt;
     for(let i=0;i<boilers.length;i++) {
       const boiler=boilers[i],visual=boilerRoom.boilers[i];
       if(boiler.advance(dt)) {
-        // Automatic relief: the strongest vent, and the loudest.
-        sound.steam(1,.9);ventSteam(i,1,10);
+        // Automatic relief: the strongest vent, the loudest, and a mishap.
+        sound.steam(1,.9);ventSteam(i,1,10);mood.mishap();
       }
       visual.update(boiler.pressure,dt);
       // A gameplay-only volume. The soft body never collides with a boiler.
@@ -142,7 +185,7 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
   };
   const physicsClock=new FixedStepper(PHYS.step);
   let lastTime=0,disposed=false,inspectionPaused=false,inspectionAccessories=false;
-  const reset=()=>{inspectionPaused=false;sound.stopFacilities();sound.reset();input.clear();rig.reset();body.reset();input.recenter();baby.resetFace();physicsClock.reset();reactions.reset();splash.clear();steam.clear();for(const boiler of boilers)boiler.reset();hissTimer=0;inside.fill(false);approaching.fill(0);};
+  const reset=()=>{inspectionPaused=false;sound.stopFacilities();sound.reset();input.clear();rig.reset();body.reset();input.recenter();baby.resetFace();physicsClock.reset();reactions.reset();splash.clear();steam.clear();for(const boiler of boilers)boiler.reset();hissTimer=0;inside.fill(false);approaching.fill(0);pump.reset();mood.reset();pumpInside=false;pumpApproach=0;sound.stopHum();};
   const input=new Input(camera,renderer.domElement,body,baby.mesh,rig,sound,reset);
   // A grip pulled to its limit breaks a single small sweat burst, then re-arms.
   input.onStretch=amount=>{if(reactions.stretchSweat(amount))sweatBurst(REACTION.stretchDrops,.34,.55);};
@@ -153,6 +196,10 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
     center:body.center.toArray(),velocity:rig.velocity.toArray(),sleeping:body.sleeping,grabs:body.grabs.length,volume:body.volumeRatio(),
     camera:camera.position.toArray(),finite:body.isFinite(),quality:{...quality},
     legs:baby.legs.debug,squirmTime:baby.squirm.time,lastLanding,pokes,giggles,
+    pump:{...pump.snapshot,centre:boilerRoom.pump.centre.toArray(),
+      half:boilerRoom.pump.half.toArray(),inside:pumpInside},
+    mood:mood.mood,
+    faultPump:()=>{pump.faulted=true;pump.unattendedTime=0;pump.faultCount++;},
     boilers:boilers.map((b,i)=>({...b.snapshot,
       centre:boilerRoom.boilers[i].centre.toArray(),
       half:boilerRoom.boilers[i].half.toArray(),inside:inside[i]})),
@@ -231,6 +278,7 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
       transport.rate=quality.opticalHz;
       reactions.advance(dt);
       stepBoilers(dt);
+      stepPump(dt);
       splash.update(dt);
       steam.update(dt);
       input.update(dt);

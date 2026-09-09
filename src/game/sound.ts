@@ -19,6 +19,9 @@ export class JellySound {
   private facilities:FacilityAudio|null=null;
   private listener={x:0,y:.12,z:.19,rightX:1,rightZ:0};
   private abort=new AbortController();
+  private humOscillator:OscillatorNode|null=null;
+  private humGain:GainNode|null=null;
+  private humFilter:BiquadFilterNode|null=null;
   private stretchOscillator:OscillatorNode|null=null;
   private stretchGain:GainNode|null=null;
   private stretchFilter:BiquadFilterNode|null=null;
@@ -96,7 +99,7 @@ export class JellySound {
   toggle() {
     this.muted=!this.muted;
     if(this.muted) {
-      this.stopFacilities();this.stopStretch();this.stopMusicScheduler();this.stopMusicTrack();this.musicStarted=false;
+      this.stopFacilities();this.stopStretch();this.stopHum();this.stopMusicScheduler();this.stopMusicTrack();this.musicStarted=false;
     }
     if(this.context&&this.master) {
       const t=this.context.currentTime;
@@ -276,6 +279,67 @@ export class JellySound {
     }
   }
 
+  /**
+   * The circulation pump's continuous note. One voice for the whole session,
+   * exactly like the stretch squeal: `speed` 1 is a calm hum, 0 is a stalled
+   * motor groaning at the bottom of its range.
+   */
+  pumpHum(speed:number) {
+    const ctx=this.context,output=this.sfxGain;
+    if(!ctx||!output||ctx.state!=='running'||this.muted){this.stopHum();return;}
+    const t=ctx.currentTime,value=Math.max(0,Math.min(1,speed));
+    if(!this.humOscillator) {
+      const osc=ctx.createOscillator(),gain=ctx.createGain(),filter=ctx.createBiquadFilter();
+      osc.type='sawtooth';filter.type='lowpass';filter.Q.value=3;filter.frequency.value=220;
+      gain.gain.value=.0001;osc.connect(filter).connect(gain).connect(output);osc.start();
+      osc.onended=()=>{osc.disconnect();gain.disconnect();filter.disconnect();
+        if(this.humOscillator===osc)this.humOscillator=null;};
+      this.humOscillator=osc;this.humGain=gain;this.humFilter=filter;
+    }
+    const osc=this.humOscillator,gain=this.humGain,filter=this.humFilter;
+    if(!osc||!gain||!filter)return;
+    osc.frequency.setTargetAtTime(46+value*28,t,.12);
+    filter.frequency.setTargetAtTime(140+value*260,t,.15);
+    // A stalled motor is quieter but not silent: it is still trying.
+    gain.gain.setTargetAtTime(.014+value*.020,t,.12);
+  }
+
+  stopHum() {
+    const ctx=this.context,osc=this.humOscillator,gain=this.humGain;
+    if(!ctx||!osc||!gain)return;
+    const t=ctx.currentTime;gain.gain.cancelScheduledValues(t);gain.gain.setTargetAtTime(.0001,t,.05);
+    osc.stop(t+.2);this.humOscillator=null;this.humGain=null;this.humFilter=null;
+  }
+
+  /** A stalled pump coughing: a low irregular chug rather than a clean tone. */
+  sputter(strength:number) {
+    const ctx=this.context;if(!ctx||this.muted)return;
+    const t=ctx.currentTime,amount=Math.max(0,Math.min(1,strength));
+    for(let i=0;i<3;i++) {
+      const at=t+i*(.055+Math.random()*.045);
+      this.tone(at,120+Math.random()*40,64,.06,.03+.045*amount,'square');
+      this.noise(at,.045,.02+.03*amount,420+Math.random()*260,1.2);
+    }
+  }
+
+  /** A solid mechanical hit on the pump housing: a thump, not a bell. */
+  thunk(strength:number) {
+    const ctx=this.context,out=this.sfxGain;
+    if(!ctx||!out||ctx.state!=='running'||this.muted)return;
+    const t=ctx.currentTime,amount=Math.max(0,Math.min(1,strength));
+    for(const [from,to,level,decay] of [[210,86,.26,.16],[128,58,.16,.24]]) {
+      const osc=ctx.createOscillator(),gain=ctx.createGain();
+      osc.type='sine';osc.frequency.setValueAtTime(from,t);
+      osc.frequency.exponentialRampToValueAtTime(to,t+decay*.7);
+      gain.gain.setValueAtTime(.0001,t);
+      gain.gain.exponentialRampToValueAtTime(level*(.4+.6*amount),t+.005);
+      gain.gain.exponentialRampToValueAtTime(.0001,t+decay);
+      osc.connect(gain).connect(out);osc.start(t);osc.stop(t+decay+.05);
+      osc.onended=()=>{osc.disconnect();gain.disconnect();};
+    }
+    this.noise(t,.055,.07+.09*amount,760,1.6,out);
+  }
+
   /** Struck boiler plate: inharmonic metal partials over a short bright hit. */
   clang(strength:number) {
     const ctx=this.context,out=this.sfxGain;
@@ -431,7 +495,7 @@ export class JellySound {
   }
 
   dispose() {
-    this.stopMusicScheduler();this.stopMusicTrack();this.stopStretch();this.facilities?.dispose();this.facilities=null;
+    this.stopMusicScheduler();this.stopMusicTrack();this.stopStretch();this.stopHum();this.facilities?.dispose();this.facilities=null;
     this.abort.abort();this.master?.disconnect();this.sfxGain?.disconnect();this.musicGain?.disconnect();this.compressor?.disconnect();
     const context=this.context;this.context=null;this.master=null;this.sfxGain=null;this.musicGain=null;this.compressor=null;this.resumePromise=null;
     if(context&&context.state!=='closed')void context.close().catch(()=>{});
