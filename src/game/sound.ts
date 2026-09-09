@@ -5,6 +5,8 @@ import { squealVoice } from './reactions.ts';
 type AudioWindow=Window&{webkitAudioContext?:typeof AudioContext};
 type ToneShape=OscillatorType;
 const MUSIC_URL=new URL('../assets/music/Steam_Valve_Open_loop.mp3',import.meta.url).href;
+/** Declined resume attempts before the context is rebuilt from scratch. */
+const REBUILD_AFTER=3;
 const HOP_SCALE=[261.63,293.66,329.63,392,440,523.25];
 
 /** One shared Web Audio graph for physical contact, cartoon cues, and music. */
@@ -20,6 +22,8 @@ export class JellySound {
   private listener={x:0,y:.12,z:.19,rightX:1,rightZ:0};
   private abort=new AbortController();
   private gestureCount=0;
+  private resumeCount=0;
+  private rebuilds=0;
   private musicFetchOk:boolean|null=null;
   private humOscillator:OscillatorNode|null=null;
   private humGain:GainNode|null=null;
@@ -51,9 +55,8 @@ export class JellySound {
     }).then(
       data=>{this.musicFetchOk=true;return data;},
       ()=>{this.musicFetchOk=false;return null;});
-    window.addEventListener('pointerdown',this.unlockFromGesture,{signal});
-    window.addEventListener('touchstart',this.unlockFromGesture,{passive:true,signal});
-    window.addEventListener('keydown',this.unlockFromGesture,{signal});
+    for(const type of ['pointerdown','pointerup','touchstart','touchend','click','keydown'])
+      window.addEventListener(type,this.unlockFromGesture,{passive:true,signal});
     document.addEventListener('visibilitychange',this.handleVisibility,{signal});
   }
 
@@ -61,7 +64,7 @@ export class JellySound {
 
   /** Audio state for the DEV hook and the opt-in ?audio on-device readout. */
   debugAudio() {
-    return {gestures:this.gestureCount,muted:this.muted,
+    return {gestures:this.gestureCount,resumes:this.resumeCount,rebuilds:this.rebuilds,muted:this.muted,
       context:this.context?.state??'none',musicFetch:this.musicFetchOk,
       musicStarted:this.musicStarted,musicBuffered:!!this.musicBuffer,
       musicSource:!!this.musicSource};
@@ -105,16 +108,53 @@ export class JellySound {
     source.onended=()=>source.disconnect();this.outputPrimed=true;
   }
 
+  /**
+   * Tear down a context that will not start and build a fresh one. Chrome can
+   * wedge a context created at an unlucky moment so that every resume() is
+   * declined; a new one made inside a real gesture normally starts straight up.
+   */
+  private rebuildContext() {
+    const dead=this.context;
+    this.stopMusicScheduler();this.musicSource=null;this.musicStarted=false;
+    this.musicBuffer=null;this.musicDecodePromise=null;
+    this.facilities?.dispose();this.facilities=null;
+    this.context=null;this.master=null;this.sfxGain=null;this.musicGain=null;this.compressor=null;
+    this.humOscillator=null;this.humGain=null;this.humFilter=null;
+    this.stretchOscillator=null;this.stretchGain=null;this.stretchFilter=null;
+    this.outputPrimed=false;this.resumePromise=null;this.resumeCount=0;this.rebuilds++;
+    if(dead&&dead.state!=='closed')void dead.close().catch(()=>{});
+    // The old fetch body was consumed by the dead context's decode, so ask again.
+    this.musicFetchPromise=fetch(MUSIC_URL).then(response=>{
+      if(!response.ok)throw new Error(`Music request failed: ${response.status}`);
+      return response.arrayBuffer();
+    }).then(data=>{this.musicFetchOk=true;return data;},()=>{this.musicFetchOk=false;return null;});
+    return this.createContext();
+  }
+
   unlock() {
-    const context=this.context??this.createContext();
+    let context=this.context??this.createContext();
     if(!context||context.state==='closed')return Promise.resolve();
+    if(context.state==='suspended'&&this.resumeCount>=REBUILD_AFTER) {
+      const fresh=this.rebuildContext();
+      if(!fresh)return Promise.resolve();
+      context=fresh;
+      if(context.state==='running') {this.primeOutput(context);this.startMusic();return Promise.resolve();}
+    }
     this.primeOutput(context);
     if(context.state==='running') {this.startMusic();return Promise.resolve();}
-    if(this.resumePromise)return this.resumePromise;
+    // Chrome leaves resume() *pending* rather than rejecting when it declines
+    // to start a context, so caching that promise and returning it on later
+    // gestures means one declined attempt blocks every retry and audio never
+    // arrives. Each gesture gets its own attempt; resume() on an already
+    // running context resolves immediately, so retrying costs nothing.
+    let attempt:Promise<void>;
     try {
-      this.resumePromise=context.resume().then(()=>this.startMusic()).catch(()=>{}).finally(()=>{this.resumePromise=null;});
-    } catch {this.resumePromise=null;return Promise.resolve();}
-    return this.resumePromise;
+      this.resumeCount++;
+      attempt=context.resume().then(()=>this.startMusic()).catch(()=>{});
+    } catch {return Promise.resolve();}
+    this.resumePromise=attempt;
+    void attempt.then(()=>{if(this.resumePromise===attempt)this.resumePromise=null;});
+    return attempt;
   }
 
   toggle() {

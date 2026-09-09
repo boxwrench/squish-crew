@@ -266,7 +266,8 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
     const tick=()=>{
       const a=sound.debugAudio();
       text.nodeValue=[
-        `gestures ${a.gestures}   muted ${a.muted}`,
+        `gestures ${a.gestures} resumes ${a.resumes} rebuilds ${a.rebuilds}`,
+        `muted    ${a.muted}`,
         `context  ${a.context}`,
         `music    fetch=${a.musicFetch} started=${a.musicStarted}`,
         `         buffered=${a.musicBuffered} playing=${a.musicSource}`,
