@@ -52,6 +52,11 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
     materials.push(m);return m;
   };
   const wall=material('#aaa18e'),lowerWall=material('#969584'),trim=material('#77796c'),steel=material('#3e5558',.64,.25);
+  // The warning pulse is deliberately kept on the broad wall finish: it reads
+  // as the room reacting without introducing another light or a new state
+  // system, and returns cleanly to zero in the smooth state.
+  wall.emissive.set('#ffa02e');wall.emissiveIntensity=0;
+  lowerWall.emissive.copy(wall.emissive);lowerWall.emissiveIntensity=0;
   const dark=material('#263638',.65,.3),copper=material('#a46e47',.62,.35);
   const red=material('#9d3e2e'),cream=material('#e6ddc3'),black=material('#35413d');
   const glow=material('#bb621d');glow.emissive.set('#ef7314');glow.emissiveIntensity=.5;
@@ -315,12 +320,31 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
   const makePump=(x:number,y:number,z:number)=>{
     const first=room.children.length;
     const lamp=material('#5a6b52',.5,.1);lamp.emissive.set('#ffb02e');lamp.emissiveIntensity=0;
-    box(.062,.010,.052,dark,0,-.030,0);
+    // A broad foot gives the assembly an intentional landing spot while
+    // staying inside the existing gameplay volume.
+    box(.082,.006,.066,dark,0,-.034,0,.003);
+    box(.058,.004,.050,trim,0,-.030,0,.002);
     box(.048,.040,.040,steel,0,-.006,0,.008);           // motor body
     const housing=cylinder(.022,.020,steel,0,-.006,.030);housing.rotation.x=Math.PI/2;
     disc(.011,.006,dark,0,-.006,.042);
-    pipe([[0,-.026,.040],[0,-.026,.056],[.014,-.012,.062]],.005,copper);
-    pipe([[-.024,-.006,.030],[-.040,-.006,.030],[-.048,.006,.024]],.0045,copper);
+    // Suction and discharge are short, visibly joined runs with a real elbow
+    // and a collar at each pump-side termination. They point toward the rear
+    // boiler line, leaving the centre of the fling area open. The first
+    // suction point is deliberately the volute face (no floating gap).
+    pipe([[0,-.026,.040],[0,-.026,.056],[-.018,-.012,.064],[-.034,-.012,.064]],.0045,copper);
+    pipe([[-.024,-.006,.030],[-.044,-.006,.030],[-.058,.006,.018],[-.058,.020,-.010]],.0040,steel);
+    for(const [px,py,pz,rot] of [[-.034,-.012,.064,Math.PI/2],[-.058,.020,-.010,0]] as const) {
+      const flange=cylinder(.007,.005,dark,px,py,pz);flange.rotation.z=rot;
+      disc(.0055,.0015,trim,px,py,pz+(rot?0:.003));
+    }
+    // Fault-only stress strips sit on the outer housing silhouette. They are
+    // hidden in the healthy state and gently pulse when the motor seizes.
+    const stressStart=room.children.length;
+    for(const [sx,sy,angle] of [[-.020,.012,-.65],[-.012,.018,-.35],[0,.020,.15],[.012,.018,.40],[.020,.012,.70],[.026,.004,.95]] as const) {
+      const strip=box(.002,.012,.0015,red,sx,sy,.044,.0003);strip.rotation.z=angle;
+    }
+    const stressGroup=new THREE.Group();stressGroup.name='pump-fault-stress';
+    stressGroup.add(...room.children.slice(stressStart));stressGroup.visible=false;room.add(stressGroup);
     // The flywheel is the one moving part, so it reads at a glance.
     const wheelGroup=new THREE.Group();
     const rim=mesh(new THREE.TorusGeometry(.019,.0035,8,20),red,0,0,0);
@@ -337,12 +361,17 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
     group.add(...room.children.slice(first));
     group.add(wheelGroup);
     group.position.set(x,y,z);room.add(group);
-    return {group,wheelGroup,lamp,indicator,base:group.position.clone(),
+    return {group,wheelGroup,lamp,indicator,stressGroup,base:group.position.clone(),
       vent:new THREE.Vector3(0,.022,.040)};
   };
   // Front-left, on open floor: the boilers sit back against the service wall,
   // so a fling at the pump is a clear line rather than a shot through them.
   const pumpVisual=makePump(-.140,.038,-.017);
+  // Fixed room-side tails meet the pump stubs at their authored endpoints and
+  // then join the existing boiler plumbing. These stay outside the rattling
+  // pump group, so the connections do not stretch during a fault.
+  pipe([[-.174,.026,.047],[-.202,.040,.040],[-.213,.063,-.10],[-.20,.12,-.162],[-.20,.163,-.162]],.0045,copper);
+  pipe([[-.198,.058,-.027],[-.216,.043,-.055],[-.230,.026,-.090],[-.240,.012,-.162]],.0040,steel);
 
   // A single amber beacon high on the service wall speaks for the whole room.
   const beaconLamp=material('#6a6357',.45,.1);beaconLamp.emissive.set('#ffb02e');beaconLamp.emissiveIntensity=0;
@@ -474,17 +503,32 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
   // Gameplay handle for the pump: its own volume, its own presentation.
   const pumpHalf=new THREE.Vector3(.062,.052,.062).multiplyScalar(.5);
   const pump={
+    wheelAngle:0,
+    faultPhase:0,
     centre:pumpVisual.base.clone().applyMatrix4(room.matrixWorld),
     half:new THREE.Vector3(pumpHalf.x*room.scale.x,pumpHalf.y*room.scale.y,pumpHalf.z*room.scale.z),
     vent:pumpVisual.vent.clone().add(pumpVisual.base).applyMatrix4(room.matrixWorld),
     /** Spin, lamp and rattle for one frame of pump state. */
     update(speed:number,faulted:boolean,dt:number) {
-      pumpVisual.wheelGroup.rotation.x+=dt*speed*22;
+      if(faulted) {
+        pump.faultPhase+=dt;
+        // A seized wheel rocks against its stop instead of spinning freely.
+        pump.wheelAngle=Math.sin(pump.faultPhase*9)*.22;
+      } else {
+        pump.faultPhase=0;
+        pump.wheelAngle+=dt*speed*22;
+      }
+      pumpVisual.wheelGroup.rotation.x=pump.wheelAngle;
       // Amber and steady while healthy; a faster, harsher flicker when stalled.
       const flicker=faulted?(Math.random()<.35?1:.15):0;
       pumpVisual.lamp.emissiveIntensity=faulted?.35+flicker*1.4:.28+speed*.22;
       pumpVisual.lamp.color.set(faulted?'#7a5a2a':'#5a6b52');
-      const rattle=faulted?.0022:0;
+      const rattle=faulted?.0048:0;
+      pumpVisual.stressGroup.visible=faulted;
+      if(faulted) {
+        const stressPulse=.94+.10*Math.sin(pump.faultPhase*9);
+        pumpVisual.stressGroup.scale.set(stressPulse,1/stressPulse,1);
+      } else pumpVisual.stressGroup.scale.set(1,1,1);
       pumpVisual.group.position.set(
         pumpVisual.base.x+(Math.random()-.5)*rattle,
         pumpVisual.base.y+(Math.random()-.5)*rattle,
@@ -492,7 +536,8 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
     },
     /** A caught motor kicks the housing and snaps the flywheel forward. */
     jolt(strength:number) {
-      pumpVisual.wheelGroup.rotation.x+=strength*1.4;
+      pump.wheelAngle+=strength*1.4;
+      pumpVisual.wheelGroup.rotation.x=pump.wheelAngle;
       pumpVisual.group.position.x=pumpVisual.base.x+(Math.random()-.5)*.007*strength;
       pumpVisual.group.position.y=pumpVisual.base.y+(Math.random()-.5)*.007*strength;
     },
@@ -500,12 +545,22 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
   /** The room's own opinion, shown on one beacon. */
   const beacon={
     update(mood:'smooth'|'warning'|'mishap',elapsed:number) {
-      if(mood==='smooth'){beaconLamp.emissiveIntensity=0;beaconDome.scale.setScalar(1);return;}
-      const pulse=.5+.5*Math.sin(elapsed*(mood==='mishap'?14:5));
+      if(mood==='smooth'){
+        beaconLamp.emissiveIntensity=0;beaconDome.scale.setScalar(1);
+        beaconLamp.color.set('#6a6357');
+        beaconLamp.emissive.set('#ffb02e');
+        wall.emissiveIntensity=0;lowerWall.emissiveIntensity=0;
+        return;
+      }
+      const pulse=.5+.5*Math.sin(elapsed*(mood==='mishap'?Math.PI*4:Math.PI*2));
       beaconLamp.color.set(mood==='mishap'?'#8c2f1c':'#6a6357');
       beaconLamp.emissive.set(mood==='mishap'?'#ff3d17':'#ffb02e');
       beaconLamp.emissiveIntensity=(mood==='mishap'?1.9:.9)*(.35+.65*pulse);
       beaconDome.scale.setScalar(1+pulse*(mood==='mishap'?.16:.07));
+      wall.emissive.set(mood==='mishap'?'#ff572c':'#ffa02e');
+      wall.emissiveIntensity=(mood==='mishap'?.75:.35)*(.45+.55*pulse);
+      lowerWall.emissive.copy(wall.emissive);
+      lowerWall.emissiveIntensity=wall.emissiveIntensity*.5;
     },
   };
 
