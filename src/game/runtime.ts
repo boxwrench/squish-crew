@@ -36,7 +36,7 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
   const scene=new THREE.Scene();
   scene.background=new THREE.Color('#e8d9c3');scene.fog=new THREE.Fog('#e8d9c3',2,12);
   const camera=new THREE.PerspectiveCamera(36,1,.001,40);
-  camera.position.set(.015,.115,.175);
+  camera.position.set(.024,.184,.28);
   stage('Turning on the lights…');
   const environment=await loadEnvironment(renderer,scene);
   stage('Finding the engineer…');
@@ -187,6 +187,13 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
   let lastTime=0,disposed=false,inspectionPaused=false,inspectionAccessories=false;
   const reset=()=>{inspectionPaused=false;sound.stopFacilities();sound.reset();input.clear();rig.reset();body.reset();input.recenter();baby.resetFace();physicsClock.reset();reactions.reset();splash.clear();steam.clear();for(const boiler of boilers)boiler.reset();hissTimer=0;inside.fill(false);approaching.fill(0);pump.reset();mood.reset();pumpInside=false;pumpApproach=0;sound.stopHum();};
   const input=new Input(camera,renderer.domElement,body,baby.mesh,rig,sound,reset);
+  // Handheld viewports start pulled all the way back so the whole room reads;
+  // desktop keeps the closer framing. Same view direction either way.
+  if(window.innerWidth<700) {
+    const controls=input.controls;
+    camera.position.sub(controls.target).setLength(controls.maxDistance).add(controls.target);
+    controls.update();
+  }
   // A grip pulled to its limit breaks a single small sweat burst, then re-arms.
   input.onStretch=amount=>{if(reactions.stretchSweat(amount))sweatBurst(REACTION.stretchDrops,.34,.55);};
   // Being poked once is a hop; being poked three times quickly is funny.
@@ -195,6 +202,7 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
   if(import.meta.env.DEV)Object.defineProperty(window,'dropletDebug',{configurable:true,get:()=>({
     center:body.center.toArray(),velocity:rig.velocity.toArray(),sleeping:body.sleeping,grabs:body.grabs.length,volume:body.volumeRatio(),
     camera:camera.position.toArray(),finite:body.isFinite(),quality:{...quality},
+    audio:sound.debugAudio(),
     legs:baby.legs.debug,squirmTime:baby.squirm.time,lastLanding,pokes,giggles,
     pump:{...pump.snapshot,centre:boilerRoom.pump.centre.toArray(),
       half:boilerRoom.pump.half.toArray(),inside:pumpInside},
@@ -236,6 +244,38 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
   document.querySelector('#reset')!.addEventListener('click',event=>{
     reset();if((event as MouseEvent).detail>0)(event.currentTarget as HTMLButtonElement).blur();
   });
+  // On-device audio diagnostics, opt in with ?audio on the URL. Phones have no
+  // console, and every interesting audio state is invisible from the outside:
+  // whether a gesture ever reached us, whether the context actually resumed,
+  // and whether the music leg is separate from the effects leg.
+  if(new URLSearchParams(location.search).has('audio')) {
+    const panel=document.createElement('pre');
+    panel.id='audio-debug';
+    panel.style.cssText='position:fixed;left:8px;bottom:8px;z-index:9;margin:0;padding:8px 10px;'
+      +'font:11px/1.45 ui-monospace,monospace;background:#000c;color:#9f9;border-radius:8px;'
+      +'max-width:calc(100vw - 16px);white-space:pre-wrap;pointer-events:auto';
+    const beep=document.createElement('button');
+    beep.textContent='test beep';
+    beep.style.cssText='display:block;margin-top:6px;font:600 12px/1 system-ui;padding:8px 12px;'
+      +'border-radius:6px;border:0;background:#9f9;color:#000';
+    beep.addEventListener('click',()=>{void sound.unlock().then(()=>sound.hop()).catch(()=>{});});
+    panel.append(beep);
+    document.body.append(panel);
+    const text=document.createTextNode('');
+    panel.prepend(text);
+    const tick=()=>{
+      const a=sound.debugAudio();
+      text.nodeValue=[
+        `gestures ${a.gestures}   muted ${a.muted}`,
+        `context  ${a.context}`,
+        `music    fetch=${a.musicFetch} started=${a.musicStarted}`,
+        `         buffered=${a.musicBuffered} playing=${a.musicSource}`,
+        `hidden   ${document.hidden}`,
+      ].join('\n')+'\n';
+      window.setTimeout(tick,400);
+    };
+    tick();
+  }
   document.querySelector('#sound')!.addEventListener('click',event=>{
     const muted=sound.toggle(),button=document.querySelector('#sound')!;
     button.setAttribute('aria-pressed',String(muted));button.setAttribute('aria-label',muted?'Enable sound':'Mute sound');
