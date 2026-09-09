@@ -19,6 +19,8 @@ export class JellySound {
   private facilities:FacilityAudio|null=null;
   private listener={x:0,y:.12,z:.19,rightX:1,rightZ:0};
   private abort=new AbortController();
+  private gestureCount=0;
+  private musicFetchOk:boolean|null=null;
   private humOscillator:OscillatorNode|null=null;
   private humGain:GainNode|null=null;
   private humFilter:BiquadFilterNode|null=null;
@@ -46,14 +48,24 @@ export class JellySound {
     this.musicFetchPromise=fetch(MUSIC_URL).then(response=>{
       if(!response.ok)throw new Error(`Music request failed: ${response.status}`);
       return response.arrayBuffer();
-    }).catch(()=>null);
+    }).then(
+      data=>{this.musicFetchOk=true;return data;},
+      ()=>{this.musicFetchOk=false;return null;});
     window.addEventListener('pointerdown',this.unlockFromGesture,{signal});
     window.addEventListener('touchstart',this.unlockFromGesture,{passive:true,signal});
     window.addEventListener('keydown',this.unlockFromGesture,{signal});
     document.addEventListener('visibilitychange',this.handleVisibility,{signal});
   }
 
-  private unlockFromGesture=()=>{void this.unlock().catch(()=>{});};
+  private unlockFromGesture=()=>{this.gestureCount++;void this.unlock().catch(()=>{});};
+
+  /** Audio state for the DEV hook and the opt-in ?audio on-device readout. */
+  debugAudio() {
+    return {gestures:this.gestureCount,muted:this.muted,
+      context:this.context?.state??'none',musicFetch:this.musicFetchOk,
+      musicStarted:this.musicStarted,musicBuffered:!!this.musicBuffer,
+      musicSource:!!this.musicSource};
+  }
 
   private handleVisibility=()=>{
     if(document.hidden) {
