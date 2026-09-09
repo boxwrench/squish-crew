@@ -276,6 +276,51 @@ export class JellySound {
     }
   }
 
+  /** Struck boiler plate: inharmonic metal partials over a short bright hit. */
+  clang(strength:number) {
+    const ctx=this.context,out=this.sfxGain;
+    if(!ctx||!out||ctx.state!=='running'||this.muted)return;
+    const t=ctx.currentTime,amount=Math.max(0,Math.min(1,strength));
+    const base=470+Math.random()*90;
+    // Deliberately non-integer ratios: a tuned stack would read as a bell.
+    for(const [ratio,level,decay] of [[1,.10,.55],[2.37,.062,.40],[3.81,.038,.26],[5.43,.022,.16]]) {
+      const osc=ctx.createOscillator(),gain=ctx.createGain();
+      osc.type='sine';osc.frequency.setValueAtTime(base*ratio,t);
+      osc.frequency.exponentialRampToValueAtTime(base*ratio*.985,t+decay);
+      gain.gain.setValueAtTime(.0001,t);
+      gain.gain.exponentialRampToValueAtTime(level*(.35+.65*amount),t+.004);
+      gain.gain.exponentialRampToValueAtTime(.0001,t+decay);
+      osc.connect(gain).connect(out);osc.start(t);osc.stop(t+decay+.05);
+      osc.onended=()=>{osc.disconnect();gain.disconnect();};
+    }
+    this.noise(t,.09,.10+.12*amount,2400,.8,out);
+  }
+
+  /**
+   * Escaping steam: filtered noise with a swelling body, long for a relief
+   * vent and short for the puff a strike knocks loose.
+   */
+  steam(strength:number,duration=.55) {
+    const ctx=this.context,out=this.sfxGain;
+    if(!ctx||!out||ctx.state!=='running'||this.muted)return;
+    const t=ctx.currentTime,amount=Math.max(0,Math.min(1,strength));
+    const length=Math.max(.12,duration);
+    const buffer=ctx.createBuffer(1,Math.floor(ctx.sampleRate*length),ctx.sampleRate);
+    const data=buffer.getChannelData(0);
+    for(let i=0;i<data.length;i++)data[i]=Math.random()*2-1;
+    const source=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),gain=ctx.createGain();
+    source.buffer=buffer;
+    filter.type='bandpass';filter.Q.value=.7;
+    filter.frequency.setValueAtTime(1500,t);
+    filter.frequency.linearRampToValueAtTime(3800,t+length*.35);
+    filter.frequency.linearRampToValueAtTime(2200,t+length);
+    gain.gain.setValueAtTime(.0001,t);
+    gain.gain.linearRampToValueAtTime(.045+.13*amount,t+Math.min(.09,length*.22));
+    gain.gain.exponentialRampToValueAtTime(.0001,t+length);
+    source.connect(filter).connect(gain).connect(out);source.start(t);source.stop(t+length+.02);
+    source.onended=()=>{source.disconnect();filter.disconnect();gain.disconnect();};
+  }
+
   /** One tiny "pfft/plink" per sweat burst, never per droplet. */
   sweat(strength:number) {
     const ctx=this.context;if(!ctx||this.muted)return;

@@ -90,6 +90,7 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
     }
     const hand=box(.00065,r*.64,.0005,red,x+r*.14,y+r*.17,z+.004,.0001);hand.rotation.z=-.65;
     disc(.0012,.0007,black,x,y,z+.0045);
+    return {hand,radius:r,x,y};
   };
 
   // The outer shell exceeds the maximum .42m camera orbit in every horizontal
@@ -276,17 +277,35 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
   for(const z of [-.62,-.02,.58])for(const sign of [-1,1])
     box(.008,.012,.010,trim,sign*(roomWidth/2-.014),sign>0?.71:.78,z,.001);
 
-  // Rounded, squat boiler with a warm, contained furnace window.
-  const boilerStart=room.children.length;
-  box(.09,.012,.076,dark,-.105,.008,-.112);
-  box(.083,.112,.066,steel,-.105,.070,-.112,.013);
-  box(.049,.041,.008,dark,-.105,.041,-.075,.009);
-  box(.036,.026,.002,glow,-.105,.041,-.070,.006);
-  for(const x of [-.115,-.105,-.095])box(.002,.025,.002,dark,x,.041,-.068,.0005);
-  box(.028,.006,.004,copper,-.105,.073,-.076,.001);
-  gauge(-.105,.098,-.075,.010);
-  for(const x of [-.136,-.074])for(const y of [.033,.067,.10])disc(.0016,.0018,copper,x,y,-.078);
-  for(const part of room.children.slice(boilerStart))part.position.x+=.022;
+  /**
+   * One rounded, squat boiler with a furnace window and its own gauge. Each
+   * gets its own shell material and its own group, so pressure can redden and
+   * shake exactly one of them without touching the rest of the room.
+   */
+  const makeBoiler=(x:number,y:number,z:number,scale:number)=>{
+    const first=room.children.length;
+    const skin=material('#3e5558',.64,.25);skin.emissive.set('#ff5312');skin.emissiveIntensity=0;
+    box(.09,.012,.076,dark,0,-.062,0);
+    box(.083,.112,.066,skin,0,0,0,.013);
+    box(.049,.041,.008,dark,0,-.029,.037,.009);
+    box(.036,.026,.002,glow,0,-.029,.042,.006);
+    for(const dx of [-.010,0,.010])box(.002,.025,.002,dark,dx,-.029,.044,.0005);
+    box(.028,.006,.004,copper,0,.003,.036,.001);
+    const dial=gauge(0,.028,.037,.010);
+    for(const dx of [-.031,.031])for(const dy of [-.037,-.003,.030])disc(.0016,.0018,copper,dx,dy,.034);
+    // A relief stack for the steam to leave through.
+    const stack=cylinder(.006,.030,copper,.026,.071,-.004);
+    pipe([[.026,.056,-.004],[.026,.030,-.004],[.014,.020,.010]],.0035,copper);
+    const group=new THREE.Group();group.name='boiler';
+    group.add(...room.children.slice(first));
+    group.position.set(x,y,z);group.scale.setScalar(scale);room.add(group);
+    return {group,skin,needle:dial.hand,dialCentre:new THREE.Vector3(dial.x,dial.y,0),
+      stackTop:new THREE.Vector3(stack.position.x,stack.position.y+.020,stack.position.z),
+      base:group.position.clone(),scale};
+  };
+  // The original boiler keeps its authored spot; the second stands clear of it
+  // and of the play centre, an easy fling to the mascot's right.
+  const boilerVisuals=[makeBoiler(-.083,.070,-.112,1),makeBoiler(.152,.061,-.120,.86)];
 
   // Broad bent runs and simple flange collars suggest a real plant room.
   pipe([[-.083,.126,-.115],[-.083,.157,-.115],[-.127,.173,-.148],[-.23,.173,-.163]],.010,dark);
@@ -350,6 +369,43 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
 
   room.updateMatrixWorld(true);
   const collisionBoxes:CollisionBox[]=solidWalls.map(wallSlab);
+  // Gameplay handles for the boilers, in world space. Purely presentation: the
+  // pressure itself lives in game/boilers.ts and is pushed in each frame.
+  const boilers=boilerVisuals.map(visual=>{
+    const shellHalf=new THREE.Vector3(.083,.112,.066).multiplyScalar(visual.scale/2);
+    const worldScale=room.scale;
+    const centre=visual.base.clone().applyMatrix4(room.matrixWorld);
+    const half=new THREE.Vector3(shellHalf.x*worldScale.x,shellHalf.y*worldScale.y,shellHalf.z*worldScale.z);
+    const vent=visual.stackTop.clone().multiplyScalar(visual.scale).add(visual.base).applyMatrix4(room.matrixWorld);
+    let shake=0;
+    return {
+      /** Axis-aligned gameplay volume; never moved by the shake below. */
+      centre,half,vent,
+      /**
+       * Push one frame of pressure. Needle sweeps the dial, the shell glows and
+       * near the peg it rattles. Shake is a transform only.
+       */
+      update(pressure:number,dt:number) {
+        const p=Math.max(0,Math.min(1,pressure));
+        // Sweeps the authored tick arc, -0.65 rad at rest to +1.35 at the peg.
+        visual.needle.rotation.z=-.65+p*2.0;
+        const heat=Math.max(0,Math.min(1,(p-.60)/.40));
+        visual.skin.emissiveIntensity=heat*heat*.85;
+        const rattle=Math.max(0,Math.min(1,(p-.80)/.20));
+        shake=Math.min(1,shake+dt*4)*rattle;
+        const amount=rattle*rattle*.0026;
+        visual.group.position.set(
+          visual.base.x+(Math.random()-.5)*amount,
+          visual.base.y+(Math.random()-.5)*amount,
+          visual.base.z+(Math.random()-.5)*amount*.6);
+      },
+      /** A struck or venting boiler kicks its needle and jolts once. */
+      jolt(strength:number) {
+        visual.group.position.x=visual.base.x+(Math.random()-.5)*.006*strength;
+        visual.group.position.y=visual.base.y+(Math.random()-.5)*.006*strength;
+      },
+    };
+  });
   // Keep collision source geometry/transforms exactly as authored. Drawing
   // only its inner face makes the room disappear correctly from outside.
   for(const object of solidWalls) {
@@ -372,6 +428,6 @@ export async function makeBoilerRoom(scene:THREE.Scene) {
     face.scale.copy(source.scale);source.visible=false;
   }
 
-  return {collisionBoxes,
+  return {collisionBoxes,boilers,
     dispose(){scene.remove(room);for(const g of geometries)g.dispose();for(const m of materials)m.dispose();texture.dispose();}};
 }

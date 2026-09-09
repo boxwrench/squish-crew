@@ -17,6 +17,9 @@ import { FixedStepper } from './fixed-step.ts';
 import { SplashParticles } from '../water/splash-particles.ts';
 import { FacilityCollision, type CollisionBox } from '../physics/facility-collision.ts';
 import { ReactionGate, REACTION, hardImpact, gruntStrength } from './reactions.ts';
+import { makeBoilers, BOILER } from './boilers.ts';
+const BOILER_FULL_VENT=BOILER.maxDrop;
+const BOILER_REACH=.008;
 import { quality, observeFrame } from '../graphics/quality.ts';
 import type { LegSnapshot } from '../graphics/mascot-legs.ts';
 
@@ -38,8 +41,68 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
   const baby=new Baby(body);scene.add(baby.group);
   const optics=new RefractiveLightField(body.cage.opticalSurface,environment.incoming,ABSORPTION);
   const splash=new SplashParticles();scene.add(splash.mesh);
+  // Steam reuses the same pooled, instanced, allocation-free particle system,
+  // configured to rise and fade instead of falling and wetting the floor.
+  const steam=new SplashParticles({color:'#e8eeec',gravity:-.22,life:1.1,
+    radius:[.004,.005],vapour:true,retireOnFloor:false});
+  scene.add(steam.mesh);
   const floor=makeBoilerFloor(optics,environment);scene.add(floor.mesh);
   const boilerRoom=await makeBoilerRoom(scene);
+  // --- Boiler pressure loop -------------------------------------------------
+  // State lives in boilers.ts, meshes in the room; this only wires them up.
+  const boilers=makeBoilers();
+  const inside=boilers.map(()=>false);
+  // A short decaying peak of approach speed. Entry alone under-reads a fling
+  // that is still accelerating as it crosses the boundary; this reads the
+  // impact rather than the exact frame the boundary was crossed.
+  const approaching=boilers.map(()=>0);
+  const toBoiler=new THREE.Vector3();
+  let hissTimer=0;
+  const ventSteam=(index:number,strength:number,count:number)=>{
+    steam.burst(boilerRoom.boilers[index].vent,.10+.20*strength,count,undefined);
+    boilerRoom.boilers[index].jolt(strength);
+  };
+  /** One frame of pressure, hit detection and feedback. */
+  const stepBoilers=(dt:number)=>{
+    hissTimer-=dt;
+    for(let i=0;i<boilers.length;i++) {
+      const boiler=boilers[i],visual=boilerRoom.boilers[i];
+      if(boiler.advance(dt)) {
+        // Automatic relief: the strongest vent, and the loudest.
+        sound.steam(1,.9);ventSteam(i,1,10);
+      }
+      visual.update(boiler.pressure,dt);
+      // A gameplay-only volume. The soft body never collides with a boiler.
+      // The margin is deliberately small: the mascot's resting spot is only
+      // ~41mm from the near boiler's centre, and a generous skin would leave
+      // him permanently inside it so no entry edge could ever fire.
+      const c=visual.centre,h=visual.half,b=body.center;
+      const overlapping=Math.abs(b.x-c.x)<h.x+BOILER_REACH&&Math.abs(b.y-c.y)<h.y+BOILER_REACH
+        &&Math.abs(b.z-c.z)<h.z+BOILER_REACH;
+      // Speed along the line into the boiler, so a sideways skim scores less.
+      toBoiler.copy(c).sub(b);
+      const distance=toBoiler.length();
+      const approach=distance>1e-6?rig.velocity.dot(toBoiler)/distance:0;
+      approaching[i]=Math.max(approach,approaching[i]*.82);
+      if(overlapping&&!inside[i]) {
+        // Only a body actually travelling into the boiler counts, so resting
+        // against a shell never registers however long he leans on it.
+        const drop=approaching[i]>0?boiler.strike(approaching[i]):0;
+        if(drop>0) {
+          sound.clang(Math.min(1,approaching[i]/BOILER.fullStrikeSpeed));
+          sound.steam(Math.min(1,drop/BOILER_FULL_VENT),.42);
+          ventSteam(i,Math.min(1,drop/BOILER_FULL_VENT),4+Math.round(drop*6));
+        }
+      }
+      inside[i]=overlapping;
+      // An angry boiler hisses to itself between events.
+      if(boiler.pressure>.62&&hissTimer<=0) {
+        sound.steam((boiler.pressure-.62)/.38*.55,.30);
+        steam.burst(visual.vent,.055,1+Math.round(boiler.pressure*2),undefined);
+        hissTimer=1.6-boiler.pressure;
+      }
+    }
+  };
   // The room's walls are solid, through the same narrow-phase the swing and
   // trampoline use. A centre-distance broad phase keeps the 1.4k-sample pass
   // off the substep entirely until he is actually near a wall.
@@ -79,7 +142,7 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
   };
   const physicsClock=new FixedStepper(PHYS.step);
   let lastTime=0,disposed=false,inspectionPaused=false,inspectionAccessories=false;
-  const reset=()=>{inspectionPaused=false;sound.stopFacilities();sound.reset();input.clear();rig.reset();body.reset();input.recenter();baby.resetFace();physicsClock.reset();reactions.reset();splash.clear();};
+  const reset=()=>{inspectionPaused=false;sound.stopFacilities();sound.reset();input.clear();rig.reset();body.reset();input.recenter();baby.resetFace();physicsClock.reset();reactions.reset();splash.clear();steam.clear();for(const boiler of boilers)boiler.reset();hissTimer=0;inside.fill(false);approaching.fill(0);};
   const input=new Input(camera,renderer.domElement,body,baby.mesh,rig,sound,reset);
   // A grip pulled to its limit breaks a single small sweat burst, then re-arms.
   input.onStretch=amount=>{if(reactions.stretchSweat(amount))sweatBurst(REACTION.stretchDrops,.34,.55);};
@@ -87,9 +150,13 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
   let pokes=0,giggles=0;
   input.onPoke=()=>{pokes++;if(reactions.poke()){giggles++;sound.giggle();}};
   if(import.meta.env.DEV)Object.defineProperty(window,'dropletDebug',{configurable:true,get:()=>({
-    center:body.center.toArray(),sleeping:body.sleeping,grabs:body.grabs.length,volume:body.volumeRatio(),
+    center:body.center.toArray(),velocity:rig.velocity.toArray(),sleeping:body.sleeping,grabs:body.grabs.length,volume:body.volumeRatio(),
     camera:camera.position.toArray(),finite:body.isFinite(),quality:{...quality},
     legs:baby.legs.debug,squirmTime:baby.squirm.time,lastLanding,pokes,giggles,
+    boilers:boilers.map((b,i)=>({...b.snapshot,
+      centre:boilerRoom.boilers[i].centre.toArray(),
+      half:boilerRoom.boilers[i].half.toArray(),inside:inside[i]})),
+    setBoilerPressure:(index:number,pressure:number)=>{boilers[index].pressure=Math.max(0,Math.min(1,pressure));},
     walls:boilerRoom.collisionBoxes.map(w=>({center:[w.center.x,w.center.y,w.center.z],
       half:[w.halfSize.x,w.halfSize.y,w.halfSize.z],
       axes:[[w.xAxis.x,w.xAxis.y,w.xAxis.z],[w.yAxis.x,w.yAxis.y,w.yAxis.z],[w.zAxis.x,w.zAxis.y,w.zAxis.z]]})),
@@ -163,7 +230,9 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
       if(observeFrame(dt))resize();
       transport.rate=quality.opticalHz;
       reactions.advance(dt);
+      stepBoilers(dt);
       splash.update(dt);
+      steam.update(dt);
       input.update(dt);
       sound.listen(camera);
       transport.follow();
@@ -173,7 +242,7 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
       const faceVersion=baby.group.children.reduce((sum,child)=>sum+(((child as THREE.Mesh).geometry?.attributes.position as THREE.BufferAttribute|undefined)?.version??0),0);
       const thicknessVersion=body.surface.geometry.attributes.opticalThickness.version;
       const size=renderer.domElement.width+','+renderer.domElement.height;
-      if(!body.sleeping||splash.active||renderedLegs!==baby.accessoryRevision||renderedSurface!==body.surfaceRevision||renderedFace!==faceVersion||
+      if(!body.sleeping||splash.active||steam.active||renderedLegs!==baby.accessoryRevision||renderedSurface!==body.surfaceRevision||renderedFace!==faceVersion||
         renderedThickness!==thicknessVersion||renderedDpr!==renderer.getPixelRatio()||renderedSize!==size||
         renderedCamera.distanceToSquared(camera.position)>1e-12||renderedRotation.angleTo(camera.quaternion)>1e-6) {
         composite.render();renderedSurface=body.surfaceRevision;renderedFace=faceVersion;renderedLegs=baby.accessoryRevision;
@@ -186,7 +255,7 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
   const dispose=()=>{
     if(disposed)return;disposed=true;
     void renderer.setAnimationLoop(null);input.dispose();sound.dispose();transport.dispose();resizeObserver.disconnect();cancelAnimationFrame(resizeFrame);
-    composite.dispose();baby.dispose();floor.dispose();boilerRoom.dispose();splash.dispose();environment.dispose();optics.dispose();renderer.dispose();
+    composite.dispose();baby.dispose();floor.dispose();boilerRoom.dispose();splash.dispose();steam.dispose();environment.dispose();optics.dispose();renderer.dispose();
   };
   window.addEventListener('pagehide',event=>{if(!event.persisted)dispose();});
   if(import.meta.hot)import.meta.hot.dispose(dispose);

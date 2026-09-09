@@ -19,6 +19,7 @@
     "test:facility-collision": "node --experimental-strip-types scripts/verify-facility-collision.mjs",
     "test:facility-shadows": "node --experimental-strip-types scripts/verify-facility-shadows.mjs",
     "test:facility-sound": "node --experimental-strip-types scripts/verify-facility-sound.mjs",
+    "test:boilers": "node --experimental-strip-types scripts/verify-boilers.mjs",
     "test:reactions": "node --experimental-strip-types scripts/verify-reactions.mjs",
     "test:multitouch": "node --experimental-strip-types scripts/verify-multitouch.mjs",
     "test:orientation": "node --experimental-strip-types scripts/verify-orientation.mjs",
