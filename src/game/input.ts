@@ -32,6 +32,8 @@ export class Input {
    * reactions. Input stays unaware of how any reaction is produced.
    */
   onStretch:(amount:number)=>void=()=>{};
+  /** A qualifying tap on the mascot, for the runtime's own reaction gating. */
+  onPoke:()=>void=()=>{};
   facilityCameraDistance:()=>number|undefined=()=>undefined;
   readonly controls:OrbitControls;
   private touchKeys=new Map<number,string>();
@@ -182,7 +184,7 @@ export class Input {
       if(index!==-1)this.body.grabs.splice(index,1);
       if(!this.body.grabs.length)this.body.grabSliding=false;// normal floor friction returns at once
       if(id!==undefined&&state.tap&&this.body.grabs.length===0&&!this.bodyControlled()) {
-        this.sound.hop();this.rig.jump();
+        this.sound.hop();this.rig.jump();this.onPoke();
       }
       if(this.canvas.hasPointerCapture(pointerId))this.canvas.releasePointerCapture(pointerId);
     }

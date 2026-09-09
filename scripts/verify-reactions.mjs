@@ -131,6 +131,61 @@ import { PLOP } from '../src/game/locomotion.ts';
   assert.equal(gate.impactSweat(.4), 0, 'while the longer sweat cooldown still holds');
 }
 
+// --- Poke chain and giggles ---------------------------------------------------
+{
+  const gate = new ReactionGate();
+  assert.equal(gate.poke(), false, 'one poke is just a hop');
+  assert.equal(gate.poke(), false, 'two pokes are still just hops');
+  assert.equal(gate.poke(), true, 'the third quick poke giggles');
+  assert(REACTION.pokeWindow >= 1.5 && REACTION.pokeWindow <= 2.0, 'chain window in the intended band');
+  assert(REACTION.giggleCooldown >= 1.5 && REACTION.giggleCooldown <= 2.5, 'cooldown in the intended band');
+}
+
+// A pause longer than the window abandons the run.
+{
+  const gate = new ReactionGate();
+  gate.poke(); gate.poke();
+  gate.advance(REACTION.pokeWindow + 1e-6);
+  assert.equal(gate.poke(), false, 'a lapsed chain starts over');
+  assert.equal(gate.poke(), false, 'still only two in the new chain');
+  assert.equal(gate.poke(), true, 'the new chain completes on its own third');
+}
+
+// Poking just inside the window keeps the run alive.
+{
+  const gate = new ReactionGate();
+  gate.poke(); gate.advance(REACTION.pokeWindow * .9);
+  gate.poke(); gate.advance(REACTION.pokeWindow * .9);
+  assert.equal(gate.poke(), true, 'each poke refreshes the window');
+}
+
+// The cooldown blocks a second giggle, and spends the run while it does.
+{
+  const gate = new ReactionGate();
+  gate.poke(); gate.poke();
+  assert.equal(gate.poke(), true, 'first giggle');
+  let extra = 0;
+  for (let i = 0; i < 30; i++) { if (gate.poke()) extra++; gate.advance(1 / 60); }
+  assert.equal(extra, 0, `rapid tapping cannot spam giggles, got ${extra}`);
+  // Once the cooldown lapses it takes three fresh pokes, not one.
+  gate.advance(REACTION.giggleCooldown + REACTION.pokeWindow);
+  assert.equal(gate.poke(), false, 'a spent run does not resume mid-chain');
+  assert.equal(gate.poke(), false);
+  assert.equal(gate.poke(), true, 'another full run giggles again');
+}
+
+// Poking is independent of landing and stretch state.
+{
+  const gate = new ReactionGate();
+  gate.grunt(.9); gate.impactSweat(.9); gate.stretchSweat(.9);
+  gate.poke(); gate.poke();
+  assert.equal(gate.poke(), true, 'landing state does not block a giggle');
+  const other = new ReactionGate();
+  other.poke(); other.poke(); other.poke();
+  assert.equal(other.grunt(.4), true, 'poking does not consume the grunt cooldown');
+  assert(other.impactSweat(.4) > 0, 'poking does not consume the sweat cooldown');
+}
+
 // --- Reset -------------------------------------------------------------------
 {
   const gate = new ReactionGate();
@@ -139,6 +194,14 @@ import { PLOP } from '../src/game/locomotion.ts';
   assert.equal(gate.grunt(.4), true, 'reset clears the grunt cooldown');
   assert(gate.impactSweat(.4) > 0, 'reset clears the sweat cooldown');
   assert.equal(gate.stretchSweat(.9), true, 'reset re-arms the extreme-stretch burst');
+}
+{
+  const gate = new ReactionGate();
+  gate.poke(); gate.poke(); gate.poke();
+  gate.reset();
+  assert.equal(gate.poke(), false, 'reset clears the poke run');
+  assert.equal(gate.poke(), false);
+  assert.equal(gate.poke(), true, 'and clears the giggle cooldown with it');
 }
 
 console.log('reactions: gating, cooldowns, squeal curve and reset verified');

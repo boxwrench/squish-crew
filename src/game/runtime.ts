@@ -83,10 +83,13 @@ export async function startGame(stage:(s:string)=>void,fail:(e:unknown)=>void) {
   const input=new Input(camera,renderer.domElement,body,baby.mesh,rig,sound,reset);
   // A grip pulled to its limit breaks a single small sweat burst, then re-arms.
   input.onStretch=amount=>{if(reactions.stretchSweat(amount))sweatBurst(REACTION.stretchDrops,.34,.55);};
+  // Being poked once is a hop; being poked three times quickly is funny.
+  let pokes=0,giggles=0;
+  input.onPoke=()=>{pokes++;if(reactions.poke()){giggles++;sound.giggle();}};
   if(import.meta.env.DEV)Object.defineProperty(window,'dropletDebug',{configurable:true,get:()=>({
     center:body.center.toArray(),sleeping:body.sleeping,grabs:body.grabs.length,volume:body.volumeRatio(),
     camera:camera.position.toArray(),finite:body.isFinite(),quality:{...quality},
-    legs:baby.legs.debug,squirmTime:baby.squirm.time,lastLanding,
+    legs:baby.legs.debug,squirmTime:baby.squirm.time,lastLanding,pokes,giggles,
     walls:boilerRoom.collisionBoxes.map(w=>({center:[w.center.x,w.center.y,w.center.z],
       half:[w.halfSize.x,w.halfSize.y,w.halfSize.z],
       axes:[[w.xAxis.x,w.xAxis.y,w.xAxis.z],[w.yAxis.x,w.yAxis.y,w.yAxis.z],[w.zAxis.x,w.zAxis.y,w.zAxis.z]]})),

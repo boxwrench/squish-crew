@@ -40,6 +40,12 @@ export const REACTION = {
   stretchDrops: 3,
   /** Below this, the strain squeal is silent. */
   squealFloor: .30,
+  /** Seconds a poke stays part of the current chain before it lapses. */
+  pokeWindow: 1.8,
+  /** Pokes in one chain that earn a giggle. */
+  pokesPerGiggle: 3,
+  /** Seconds after a giggle before another can be earned. */
+  giggleCooldown: 2.0,
 } as const;
 
 /** 0-1 measure of how hard a landing was, above the sweat threshold. */
@@ -76,11 +82,17 @@ export class ReactionGate {
   private gruntTimer = 0;
   private sweatTimer = 0;
   private stretchArmed = true;
+  private pokeCount = 0;
+  private pokeTimer = 0;
+  private giggleTimer = 0;
 
   /** Run the cooldown clocks forward one rendered frame. */
   advance(dt: number) {
     this.gruntTimer = Math.max(0, this.gruntTimer - dt);
     this.sweatTimer = Math.max(0, this.sweatTimer - dt);
+    this.giggleTimer = Math.max(0, this.giggleTimer - dt);
+    this.pokeTimer = Math.max(0, this.pokeTimer - dt);
+    if (this.pokeTimer <= 0) this.pokeCount = 0;
   }
 
   /** True when this contact is hard enough, and recent enough, to grunt at. */
@@ -111,5 +123,26 @@ export class ReactionGate {
   /** A finished grab re-arms the extreme-stretch burst for the next one. */
   releaseGrab() { this.stretchArmed = true; }
 
-  reset() { this.gruntTimer = 0; this.sweatTimer = 0; this.stretchArmed = true; }
+  /**
+   * One qualifying tap on the mascot. True when this poke completes a quick
+   * run of them and he should giggle. Kept entirely separate from the landing
+   * and stretch state, so poking never interferes with grunts or sweat.
+   */
+  poke() {
+    this.pokeCount++;
+    this.pokeTimer = REACTION.pokeWindow;
+    if (this.pokeCount < REACTION.pokesPerGiggle) return false;
+    // The run is spent either way, so a blocked giggle still needs three fresh
+    // pokes rather than firing on the next one the moment the cooldown ends.
+    this.pokeCount = 0;
+    this.pokeTimer = 0;
+    if (this.giggleTimer > 0) return false;
+    this.giggleTimer = REACTION.giggleCooldown;
+    return true;
+  }
+
+  reset() {
+    this.gruntTimer = 0; this.sweatTimer = 0; this.stretchArmed = true;
+    this.pokeCount = 0; this.pokeTimer = 0; this.giggleTimer = 0;
+  }
 }
